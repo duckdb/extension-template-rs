@@ -6,6 +6,10 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[profile.release]
+lto = true
+strip = true
+
 [[example]]
 # crate-type can't be (at the moment) be overriden for specific targets
 # src/wasm_lib.rs forwards to src/lib.rs so that we can change from cdylib
