@@ -49,6 +49,29 @@ to the `build/debug` directory.
 
 To create optimized release binaries, simply run `make release` instead.
 
+### Running the extension
+To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.
+
+```sh
+duckdb -unsigned
+```
+
+After loading the extension by the file path, you can use the functions provided by the extension (in this case, `rusty_quack()`).
+
+```sql
+LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
+SELECT * FROM rusty_quack('Jane');
+```
+
+```
+┌─────────────────────┐
+│       column0       │
+│       varchar       │
+├─────────────────────┤
+│ Rusty Quack Jane 🐥 │
+└─────────────────────┘
+```
+
 ## Testing
 This extension uses the DuckDB Python client for testing. This should be automatically installed in the `make configure` step.
 The tests themselves are written in the SQLLogicTest format, just like most of DuckDB's tests. A sample test can be found in
