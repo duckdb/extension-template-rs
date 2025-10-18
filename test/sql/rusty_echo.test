@@ -1,0 +1,22 @@
+# name: test/sql/rusty_echo.test
+# description: test rusty_quack extension
+# group: [quack]
+
+# Before we load the extension, this will fail
+statement error
+SELECT rusty_echo('col0') FROM values ('Hello') as v;
+----
+Catalog Error: Scalar Function with name rusty_echo does not exist!
+
+# Require statement will ensure the extension is loaded from now on
+require rusty_quack
+
+require icu
+
+# Confirm the extension works
+query I
+SELECT rusty_echo(col0) FROM values ('Hello'), ('rusty'), ('world') as v;
+----
+🐤 Hello📢Hello📢Hello
+🐤 rusty📢rusty📢rusty
+🐤 world📢world📢world
