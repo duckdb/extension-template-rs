@@ -7,11 +7,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
-
 jobs:
   duckdb-stable-build:
     name: Build extension binaries
@@ -22,3 +20,4 @@ jobs:
       extension_name: rusty_quack
       extra_toolchains: rust;python3
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;linux_amd64_musl'
+    if: (github.event_name != 'push' || !contains(lower(join(github.event.commits.*.message, ' ')), 'bump to')) && (github.event_name != 'pull_request' || !contains(lower(github.event.pull_request.title), 'bump to'))
