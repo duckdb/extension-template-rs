@@ -1,6 +1,3 @@
-extern crate duckdb;
-extern crate libduckdb_sys;
-
 use duckdb::{
     core::{DataChunkHandle, Inserter, LogicalTypeHandle, LogicalTypeId},
     duckdb_entrypoint_c_api,
