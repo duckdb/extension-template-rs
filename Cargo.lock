@@ -476,9 +476,9 @@ dependencies = [
 
 [[package]]
 name = "duckdb"
-version = "1.4.3"
+version = "1.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7eeb487dde618b9f6ab26a451775ad5fac3fabe1ca2b64cbbe90b105f264ccd"
+checksum = "8685352ce688883098b61a361e86e87df66fc8c444f4a2411e884c16d5243a65"
 dependencies = [
  "arrow",
  "cast",
@@ -494,9 +494,9 @@ dependencies = [
 
 [[package]]
 name = "duckdb-loadable-macros"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97c41b2b560728846778d8035676b5b04c3a30cb61352ce45332bb1215b0c310"
+checksum = "ee30ae7df1ed1b07389651dc8ffa2f20862b3cadcf4334fe8461c739a2701ed6"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1055,9 +1055,9 @@ checksum = "58f929b4d672ea937a23a1ab494143d968337a5f47e56d0815df1e0890ddf174"
 
 [[package]]
 name = "libduckdb-sys"
-version = "1.4.3"
+version = "1.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8c60c2d269e63ae5197e4fe9075efffed35dfda0095a5ac8b41f3c765b18456"
+checksum = "d78bacb8933586cee3b550c39b610d314f9b7a48701ac7a914a046165a4ad8da"
 dependencies = [
  "flate2",
  "pkg-config",
@@ -1665,7 +1665,6 @@ name = "rusty_quack"
 version = "0.1.0"
 dependencies = [
  "duckdb",
- "duckdb-loadable-macros",
  "libduckdb-sys",
 ]
 
