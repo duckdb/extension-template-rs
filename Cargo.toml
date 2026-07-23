@@ -1,7 +1,7 @@
 [package]
 name = "rusty_quack"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]
@@ -20,4 +20,4 @@ path = "src/wasm_lib.rs"
 crate-type = ["staticlib"]
 
 [dependencies]
-duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vscalar"] }
+duckdb = { version = "~1.10505.0", features = ["loadable-extension", "vscalar"] }
