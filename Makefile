@@ -17,6 +17,14 @@ all: configure debug
 include extension-ci-tools/makefiles/c_api_extensions/base.Makefile
 include extension-ci-tools/makefiles/c_api_extensions/rust.Makefile
 
+# Build workspace libraries rather than the CI tools' Wasm example target.
+IS_EXAMPLE=
+ifneq ($(DUCKDB_WASM_PLATFORM),)
+	TARGET_INFO=--target $(TARGET) --package rusty_quack_wasm
+else
+	TARGET_INFO+=--package rusty_quack
+endif
+
 configure: venv platform extension_version
 
 debug: build_extension_library_debug build_extension_with_metadata_debug

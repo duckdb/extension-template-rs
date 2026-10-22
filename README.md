@@ -31,6 +31,17 @@ Installing these dependencies will vary per platform:
 - For MacOS, [homebrew](https://formulae.brew.sh/).
 - For Windows, [chocolatey](https://community.chocolatey.org/).
 
+## Project layout
+
+The Cargo workspace contains three crates:
+
+- `crates/core` (`rusty_quack_core`): the shared function implementations and registration.
+- `crates/native` (`rusty_quack`): a native `cdylib` with the DuckDB extension entrypoint.
+- `crates/wasm` (`rusty_quack_wasm`): a Wasm `staticlib` with the same entrypoint.
+
+Both entrypoint crates depend on `rusty_quack_core`. Add or modify extension functionality in `crates/core/src/lib.rs`.
+Dependency versions and release settings are shared in the root `Cargo.toml`.
+
 ## Building
 After installing the dependencies, building is a two-step process. Firstly run:
 ```shell
@@ -48,6 +59,16 @@ a script is run to transform the shared library into a loadable extension by app
 to the `build/debug` directory.
 
 To create optimized release binaries, simply run `make release` instead.
+
+Plain `cargo build` builds the native crate by default. To build the Wasm static library directly, use:
+
+```shell
+rustup target add wasm32-unknown-emscripten
+cargo build --release --package rusty_quack_wasm --target wasm32-unknown-emscripten
+```
+
+This produces `target/wasm32-unknown-emscripten/release/librusty_quack.a`. The Makefile also selects this crate for
+Wasm builds instead of compiling an example. Linking the archive into a loadable Wasm extension requires the Emscripten SDK.
 
 ### Running the extension
 To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.

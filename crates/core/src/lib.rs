@@ -6,7 +6,6 @@ use std::{
     },
 };
 
-use duckdb_loadable_macros::duckdb_entrypoint_c_api_v2;
 use duckdb_neo::{
     DuckDBType, Error, FromValue, Result,
     extension::Extension,
@@ -175,8 +174,7 @@ impl TableFunctionCallbacks for EchoTable {
     }
 }
 
-#[duckdb_entrypoint_c_api_v2(extension_name = "rusty_quack", api_version = "2.0.0")]
-pub fn entrypoint(extension: &Extension) -> Result<()> {
+pub fn register(extension: &Extension) -> Result<()> {
     ScalarFunctionBuilder::new(
         "rusty_echo",
         SignatureBuilder::new()

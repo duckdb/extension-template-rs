@@ -361,6 +361,23 @@ version = "0.1.0"
 dependencies = [
  "duckdb-loadable-macros",
  "duckdb-neo",
+ "rusty_quack_core",
+]
+
+[[package]]
+name = "rusty_quack_core"
+version = "0.1.0"
+dependencies = [
+ "duckdb-neo",
+]
+
+[[package]]
+name = "rusty_quack_wasm"
+version = "0.1.0"
+dependencies = [
+ "duckdb-loadable-macros",
+ "duckdb-neo",
+ "rusty_quack_core",
 ]
 
 [[package]]
