@@ -22,8 +22,9 @@ sed_inplace() {
 }
 
 sed_inplace -E "s!^TARGET_DUCKDB_VERSION=.*!TARGET_DUCKDB_VERSION=$DUCKDB_VERSION!" Makefile
-sed_inplace -E "/_extension_distribution\.yml@|duckdb_version:|ci_tools_version:/s!v[0-9]+\.[0-9]+\.[0-9]+!$DUCKDB_VERSION!g" \
+sed_inplace -E "/duckdb_version:|ci_tools_version:/s!v[0-9]+\.[0-9]+\.[0-9]+!$DUCKDB_VERSION!g" \
     .github/workflows/MainDistributionPipeline.yml
 sed_inplace -E "/^duckdb[[:space:]]*=/s!version = \"[^\"]+\"!version = \"~$CARGO_VERSION\"!" Cargo.toml
 
 echo "Updated to duckdb-rs $CARGO_VERSION / DuckDB $DUCKDB_VERSION"
+echo "Note: update the extension-ci-tools workflow ref and submodule manually; its tags may differ from DuckDB's."
