@@ -7,12 +7,11 @@ use std::{
 };
 
 use duckdb_neo::{
-    DuckDBType, Error, FromValue, Result,
+    DuckDBType, FromValue, Result,
     extension::Extension,
     scalar::{ScalarCallbacks, ScalarFunctionBuilder, ScalarInitCallbacks},
     signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
     table_function::{TableFunctionBuilder, TableFunctionCallbacks},
-    types::List,
 };
 
 struct EchoScalar {
@@ -120,9 +119,9 @@ impl TableFunctionCallbacks for EchoTable {
         bind_data: &Self::BindData,
         global_state: Option<&Self::GlobalState>,
         local_state: Option<&mut Self::LocalState>,
-        context: &duckdb_neo::connection::Context,
+        _context: &duckdb_neo::connection::Context,
         mut output: duckdb_neo::data_chunk::DataChunkRef<'_>,
-        column_info: duckdb_neo::table_function::ExecColumnInfo<'_>,
+        _column_info: duckdb_neo::table_function::ExecColumnInfo<'_>,
     ) -> Result<()> {
         let [name, icon, concat_name, total_index] = output.get_vector_array_mut([0, 1, 2, 3])?;
         let mut name = name.cast::<String>()?;

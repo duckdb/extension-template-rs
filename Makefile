@@ -7,6 +7,7 @@ EXTENSION_NAME=rusty_quack
 # Set to 1 to enable Unstable API (binaries will only work on TARGET_DUCKDB_VERSION, forwards compatibility will be broken)
 # Note: currently extension-template-rs requires this, as duckdb-rs relies on unstable C API functionality
 USE_UNSTABLE_C_API=1
+CAPI_VERSION=2
 
 # Target DuckDB version
 TARGET_DUCKDB_VERSION=v2.0.0

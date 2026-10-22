@@ -60,16 +60,9 @@ to the `build/debug` directory.
 
 To create optimized release binaries, simply run `make release` instead.
 
-Plain `cargo build` builds the native crate by default. To build the Wasm static library directly, use:
+### WASM
 
-```shell
-rustup target add wasm32-unknown-emscripten
-cargo build --release --package rusty_quack_wasm --target wasm32-unknown-emscripten
-```
-
-This produces `target/wasm32-unknown-emscripten/release/librusty_quack.a`. The Makefile also selects this crate for
-Wasm builds instead of compiling an example. Linking the archive into a loadable Wasm extension requires the Emscripten SDK.
-
+To build for WASM targets, please run `make wasm_eh`. This will create `./build/wasm_eh/release/rusty_quack.duckdb_extension.wasm`, that can then be used inside nodejs or an browser.
 ### Running the extension
 To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.
 
