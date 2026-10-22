@@ -1,107 +1,208 @@
-use duckdb::{
-    Connection, Result,
-    core::{DataChunkHandle, Inserter, LogicalTypeHandle, LogicalTypeId},
-    duckdb_entrypoint_c_api,
-    ffi::duckdb_string_t,
-    types::DuckString,
-    vscalar::{ScalarFunctionSignature, VScalar},
-    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab, arrow::WritableVector},
-};
 use std::{
-    error::Error,
-    ffi::CString,
-    sync::atomic::{AtomicBool, Ordering},
+    any::Any,
+    sync::{
+        Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
-struct EchoScalar;
+use duckdb_loadable_macros::duckdb_entrypoint_c_api_v2;
+use duckdb_neo::{
+    DuckDBType, Error, FromValue, Result,
+    extension::Extension,
+    scalar::{ScalarCallbacks, ScalarFunctionBuilder, ScalarInitCallbacks},
+    signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
+    table_function::{TableFunctionBuilder, TableFunctionCallbacks},
+    types::List,
+};
 
-impl VScalar for EchoScalar {
-    type State = ();
+struct EchoScalar {
+    prefix: String,
+}
 
-    fn invoke(
-        _state: &Self::State,
-        input: &mut DataChunkHandle,
-        output: &mut dyn WritableVector,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let input_vec = input.flat_vector(0);
-        let values = unsafe { input_vec.as_slice_with_len::<duckdb_string_t>(input.len()) };
-        let mut output = output.flat_vector();
+impl ScalarInitCallbacks for EchoScalar {
+    fn init(
+        &self,
+        _bind_data: Option<&Self::BindData>,
+        _context: &duckdb_neo::connection::Context,
+    ) -> Result<Self::InitData> {
+        return Ok("🦀".into());
+    }
+}
 
-        for (i, value) in values.iter().enumerate() {
-            if input_vec.row_is_null(i as u64) {
-                output.set_null(i);
-                continue;
+impl ScalarCallbacks for EchoScalar {
+    type BindData = ();
+    type InitData = String;
+
+    fn exec(
+        &self,
+        _bind_data: Option<&Self::BindData>,
+        init_data: Option<&mut Self::InitData>,
+        _context: &duckdb_neo::connection::Context,
+        vectors: &mut duckdb_neo::data_chunk::VectorCollection,
+        output: duckdb_neo::vector::Vector<'_, duckdb_neo::vector::Unknown>,
+    ) -> Result<()> {
+        // Type case since we can overwrite the output type at bind time.
+        let mut output = output.cast::<String>()?;
+        output.set_size(vectors.row_count()?)?;
+
+        let prefix = &self.prefix;
+        let postfix = init_data.unwrap();
+
+        let vector = vectors.get_vector_at::<String>(0)?;
+        let reader = vector.reader()?;
+        let mut writer = output.writer()?;
+
+        for (i, row) in reader.iter().enumerate() {
+            match row {
+                Some(row) => writer.set(i, Some(&format!("{prefix} {row} {postfix} {row}"))),
+                None => writer.set(i, None),
+            }?
+        }
+        Ok(())
+    }
+}
+
+struct EchoTable {
+    icons: Vec<String>,
+}
+
+impl TableFunctionCallbacks for EchoTable {
+    type GlobalState = AtomicU64;
+    type LocalState = String;
+    type BindData = Mutex<Vec<Option<String>>>;
+
+    fn init_global_state(
+        &self,
+        _bind_data: &Self::BindData,
+        _context: &duckdb_neo::connection::Context,
+        _column_data: duckdb_neo::table_function::InitColumnData<'_>,
+    ) -> Result<(Option<Self::GlobalState>, Option<usize>)> {
+        Ok((Some(0.into()), None))
+    }
+
+    fn init_local_state(
+        &self,
+        _bind_data: &Self::BindData,
+        _global_state: Option<&Self::GlobalState>,
+        _context: &duckdb_neo::connection::Context,
+        _column_data: duckdb_neo::table_function::InitColumnData<'_>,
+    ) -> Result<Option<Self::LocalState>> {
+        Ok(Some("".into()))
+    }
+
+    fn bind(
+        &self,
+        context: &duckdb_neo::connection::Context,
+        arguments: Vec<duckdb_neo::bind_arguments::BindArgument>,
+        bind_handle: duckdb_neo::table_function::BindFunctionHandle<'_>,
+    ) -> Result<Self::BindData> {
+        bind_handle.add_result_column("name", &String::logical_type(context)?)?;
+        bind_handle.add_result_column("icon", &String::logical_type(context)?)?;
+        bind_handle.add_result_column("concat_name", &String::logical_type(context)?)?;
+        bind_handle.add_result_column("total_index", &u64::logical_type(context)?)?;
+
+        let arg = arguments.get(0).unwrap();
+
+        let value = arg.value.as_ref();
+
+        assert_eq!(
+            arg.logical_type.type_id(),
+            <Vec<String>>::logical_type(&context)?.type_id()
+        );
+
+        let items = <Vec<Option<String>>>::from_value(value.unwrap())?.unwrap_or_default();
+
+        Ok(Mutex::new(items))
+    }
+
+    fn exec(
+        &self,
+        bind_data: &Self::BindData,
+        global_state: Option<&Self::GlobalState>,
+        local_state: Option<&mut Self::LocalState>,
+        context: &duckdb_neo::connection::Context,
+        mut output: duckdb_neo::data_chunk::DataChunkRef<'_>,
+        column_info: duckdb_neo::table_function::ExecColumnInfo<'_>,
+    ) -> Result<()> {
+        let [name, icon, concat_name, total_index] = output.get_vector_array_mut([0, 1, 2, 3])?;
+        let mut name = name.cast::<String>()?;
+        let mut icon = icon.cast::<String>()?;
+        let mut concat_name = concat_name.cast::<String>()?;
+        let mut total_index = total_index.cast::<u64>()?;
+
+        let bind_data_len = bind_data.lock().unwrap().len();
+
+        name.set_size(bind_data_len)?;
+        icon.set_size(bind_data_len)?;
+        concat_name.set_size(bind_data_len)?;
+        total_index.set_size(bind_data_len)?;
+
+        let mut name_writer = name.writer()?;
+        let mut icon_writer = icon.writer()?;
+        let mut concat_name_writer = concat_name.writer()?;
+        let mut total_index_writer = total_index.writer()?;
+
+        let mut index = 0;
+        let local_concat = local_state.unwrap();
+
+        while let Some(name) = bind_data.lock().unwrap().pop() {
+            match name {
+                None => {
+                    name_writer.set(index, None)?;
+                    icon_writer.set(index, None)?;
+                    concat_name_writer.set(index, None)?;
+                    total_index_writer.set(index, None)?;
+                }
+                Some(name) => {
+                    let icon_index = global_state.unwrap().fetch_add(1, Ordering::AcqRel);
+
+                    let icon = &self.icons[icon_index as usize % self.icons.len()];
+
+                    local_concat.push_str(&name);
+                    local_concat.push('|');
+
+                    name_writer.set(index, Some(&name))?;
+                    icon_writer.set(index, Some(icon))?;
+                    concat_name_writer.set(index, Some(local_concat))?;
+                    total_index_writer.set(index, Some(index as u64))?;
+                }
             }
-
-            let mut value = *value;
-            let s = DuckString::new(&mut value).as_str();
-            output.insert(i, format!("🐤 {s} 🦀 {s}").as_str());
+            index += 1;
         }
+
         Ok(())
     }
-
-    fn signatures() -> Vec<ScalarFunctionSignature> {
-        vec![ScalarFunctionSignature::exact(
-            vec![LogicalTypeId::Varchar.into()],
-            LogicalTypeId::Varchar.into(),
-        )]
-    }
 }
 
-#[repr(C)]
-struct HelloBindData {
-    name: String,
-}
+#[duckdb_entrypoint_c_api_v2(extension_name = "rusty_quack", api_version = "2.0.0")]
+pub fn entrypoint(extension: &Extension) -> Result<()> {
+    ScalarFunctionBuilder::new(
+        "rusty_echo",
+        SignatureBuilder::new()
+            .param(FunctionParameter::new::<String>("input"))
+            .return_type(String::logical_type(extension)?)
+            .documentation(
+                FunctionDocumentationBuilder::new()
+                    .add_category("example")
+                    .add_example("echo", "echo('hello')")
+                    .description("Echo back the input you provided, but with a rusty twist!"),
+            ),
+        EchoScalar {
+            prefix: "🐤".to_string(),
+        },
+    )
+    .with_init()
+    .register(extension)?;
 
-#[repr(C)]
-struct HelloInitData {
-    done: AtomicBool,
-}
-
-struct HelloVTab;
-
-impl VTab for HelloVTab {
-    type InitData = HelloInitData;
-    type BindData = HelloBindData;
-
-    fn bind(bind: &BindInfo) -> Result<Self::BindData, Box<dyn std::error::Error>> {
-        bind.add_result_column("column0", LogicalTypeHandle::from(LogicalTypeId::Varchar));
-        let name = bind.get_parameter(0).to_string();
-        Ok(HelloBindData { name })
-    }
-
-    fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn std::error::Error>> {
-        Ok(HelloInitData {
-            done: AtomicBool::new(false),
-        })
-    }
-
-    fn func(
-        func: &TableFunctionInfo<Self>,
-        output: &mut DataChunkHandle,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let init_data = func.get_init_data();
-        let bind_data = func.get_bind_data();
-        if init_data.done.swap(true, Ordering::Relaxed) {
-            output.set_len(0);
-        } else {
-            let vector = output.flat_vector(0);
-            let result = CString::new(format!("Rusty Quack {} 🐥", bind_data.name))?;
-            vector.insert(0, result);
-            output.set_len(1);
-        }
-        Ok(())
-    }
-
-    fn parameters() -> Option<Vec<LogicalTypeHandle>> {
-        Some(vec![LogicalTypeHandle::from(LogicalTypeId::Varchar)])
-    }
-}
-
-#[duckdb_entrypoint_c_api]
-pub unsafe fn extension_entrypoint(con: Connection) -> Result<(), Box<dyn Error>> {
-    con.register_scalar_function::<EchoScalar>("rusty_echo")?;
-    con.register_table_function::<HelloVTab>("rusty_quack")?;
+    TableFunctionBuilder::new(
+        "rusty_quack",
+        SignatureBuilder::new().param(FunctionParameter::new::<Vec<String>>("names")),
+        EchoTable {
+            icons: vec!["🐤".into(), "🦀".into(), "🐥".into()],
+        },
+    )
+    .register(extension)?;
 
     Ok(())
 }

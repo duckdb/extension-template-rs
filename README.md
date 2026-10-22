@@ -53,14 +53,13 @@ To create optimized release binaries, simply run `make release` instead.
 To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.
 
 ```sh
-duckdb -unsigned
+duckdb -unsigned -cmd "LOAD '$PWD/build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';"
 ```
 
 After loading the extension by the file path, you can use the functions provided by the extension. This template registers
 the `rusty_echo()` scalar function and the `rusty_quack()` table function.
 
 ```sql
-LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
 SELECT rusty_echo('Jane');
 ```
 
@@ -74,16 +73,19 @@ SELECT rusty_echo('Jane');
 ```
 
 ```sql
-SELECT * FROM rusty_quack('Jane');
+SELECT * FROM rusty_quack(['Jane', 'Doe', 'Loves', 'Ducks']);
 ```
 
 ```
-┌─────────────────────┐
-│       column0       │
-│       varchar       │
-├─────────────────────┤
-│ Rusty Quack Jane 🐥 │
-└─────────────────────┘
+┌─────────┬─────────┬───────────────────────┬─────────────┐
+│  name   │  icon   │      concat_name      │ total_index │
+│ varchar │ varchar │        varchar        │   uint64    │
+├─────────┼─────────┼───────────────────────┼─────────────┤
+│ Ducks   │ 🐤      │ Ducks|                │           0 │
+│ Loves   │ 🦀      │ Ducks|Loves|          │           1 │
+│ Doe     │ 🐥      │ Ducks|Loves|Doe|      │           2 │
+│ Jane    │ 🐤      │ Ducks|Loves|Doe|Jane| │           3 │
+└─────────┴─────────┴───────────────────────┴─────────────┘
 ```
 
 ## Testing

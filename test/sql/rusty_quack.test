@@ -1,20 +1,23 @@
 # name: test/sql/rusty_quack.test
-# description: test rusty_quack extension
+# description: Fill all four output vectors from the table callback
 # group: [quack]
 
-# Before we load the extension, this will fail
-statement error
-SELECT rusty_quack('Sam');
-----
-Catalog Error: Scalar Function with name rusty_quack does not exist!
-
-# Require statement will ensure the extension is loaded from now on
 require rusty_quack
 
-require icu
-
-# Confirm the extension works
-query I
-SELECT * from rusty_quack('Sam');
+query TTTI
+SELECT * FROM rusty_quack(['Alice', NULL, 'Bob', 'Cara']) ORDER BY total_index NULLS LAST;
 ----
-Rusty Quack Sam 🐥
+Cara	🐤	Cara|	0
+Bob	🦀	Cara|Bob|	1
+Alice	🐥	Cara|Bob|Alice|	3
+NULL	NULL	NULL	NULL
+
+query I
+SELECT count(*) FROM rusty_quack([]::VARCHAR[]);
+----
+0
+
+query I
+SELECT count(*) FROM rusty_quack(NULL::VARCHAR[]);
+----
+0
