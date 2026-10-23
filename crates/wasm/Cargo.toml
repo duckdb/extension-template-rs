@@ -1,0 +1,13 @@
+[package]
+name = "rusty_quack_wasm"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "rusty_quack"
+crate-type = ["staticlib"]
+
+[dependencies]
+duckdb-neo.workspace = true
+duckdb-loadable-macros.workspace = true
+rusty_quack_core.workspace = true

@@ -31,6 +31,17 @@ Installing these dependencies will vary per platform:
 - For MacOS, [homebrew](https://formulae.brew.sh/).
 - For Windows, [chocolatey](https://community.chocolatey.org/).
 
+## Project layout
+
+The Cargo workspace contains three crates:
+
+- `crates/core` (`rusty_quack_core`): the shared function implementations and registration.
+- `crates/native` (`rusty_quack`): a native `cdylib` with the DuckDB extension entrypoint.
+- `crates/wasm` (`rusty_quack_wasm`): a Wasm `staticlib` with the same entrypoint.
+
+Both entrypoint crates depend on `rusty_quack_core`. Add or modify extension functionality in `crates/core/src/lib.rs`.
+Dependency versions and release settings are shared in the root `Cargo.toml`.
+
 ## Building
 After installing the dependencies, building is a two-step process. Firstly run:
 ```shell
@@ -49,18 +60,20 @@ to the `build/debug` directory.
 
 To create optimized release binaries, simply run `make release` instead.
 
+### WASM
+
+To build for WASM targets, please run `make wasm_eh`. This will create `./build/wasm_eh/release/rusty_quack.duckdb_extension.wasm`, that can then be used inside nodejs or an browser.
 ### Running the extension
 To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.
 
 ```sh
-duckdb -unsigned
+duckdb -unsigned -cmd "LOAD '$PWD/build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';"
 ```
 
 After loading the extension by the file path, you can use the functions provided by the extension. This template registers
 the `rusty_echo()` scalar function and the `rusty_quack()` table function.
 
 ```sql
-LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
 SELECT rusty_echo('Jane');
 ```
 
@@ -74,16 +87,19 @@ SELECT rusty_echo('Jane');
 ```
 
 ```sql
-SELECT * FROM rusty_quack('Jane');
+SELECT * FROM rusty_quack(['Jane', 'Doe', 'Loves', 'Ducks']);
 ```
 
 ```
-┌─────────────────────┐
-│       column0       │
-│       varchar       │
-├─────────────────────┤
-│ Rusty Quack Jane 🐥 │
-└─────────────────────┘
+┌─────────┬─────────┬───────────────────────┬─────────────┐
+│  name   │  icon   │      concat_name      │ total_index │
+│ varchar │ varchar │        varchar        │   uint64    │
+├─────────┼─────────┼───────────────────────┼─────────────┤
+│ Ducks   │ 🐤      │ Ducks|                │           0 │
+│ Loves   │ 🦀      │ Ducks|Loves|          │           1 │
+│ Doe     │ 🐥      │ Ducks|Loves|Doe|      │           2 │
+│ Jane    │ 🐤      │ Ducks|Loves|Doe|Jane| │           3 │
+└─────────┴─────────┴───────────────────────┴─────────────┘
 ```
 
 ## Testing

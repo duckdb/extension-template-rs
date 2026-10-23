@@ -1,23 +1,17 @@
-[package]
-name = "rusty_quack"
+[workspace]
+members = ["crates/core", "crates/native", "crates/wasm"]
+default-members = ["crates/native"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-crate-type = ["cdylib"]
+[workspace.dependencies]
+duckdb-neo = { version = "0.20000.0", features = ["build-extension"] }
+duckdb-loadable-macros = { version = "1.20000.0", features = ["neo"] }
+rusty_quack_core = { path = "crates/core" }
 
 [profile.release]
 lto = true
 strip = true
-
-[[example]]
-# crate-type can't be (at the moment) be overriden for specific targets
-# src/wasm_lib.rs forwards to src/lib.rs so that we can change from cdylib
-# (that is needed while compiling natively) to staticlib (needed since the
-# actual linking will be done via emcc
-name = "rusty_quack"
-path = "src/wasm_lib.rs"
-crate-type = ["staticlib"]
-
-[dependencies]
-duckdb = { version = "~1.10506.0", features = ["loadable-extension", "vscalar"] }

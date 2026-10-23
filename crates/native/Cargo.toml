@@ -1,0 +1,12 @@
+[package]
+name = "rusty_quack"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+duckdb-neo.workspace = true
+duckdb-loadable-macros.workspace = true
+rusty_quack_core.workspace = true
