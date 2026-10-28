@@ -1,0 +1,22 @@
+# name: test/sql/quack_type.test
+# description: QUACK custom type and the INTEGER -> QUACK cast
+# group: [quack]
+
+require rusty_quack
+
+# Criterion 8 / candidate T4.
+query T
+SELECT 3::QUACK;
+----
+quackquackquack
+
+# Out of range: TRY_CAST gives NULL, CAST raises the cast's own error.
+query T
+SELECT TRY_CAST(11 AS QUACK);
+----
+NULL
+
+statement error
+SELECT CAST(11 AS QUACK);
+----
+between 0 and 10

@@ -1,0 +1,23 @@
+# name: test/sql/rusty_longest.test
+# description: rusty_longest aggregate: the longest string, ties to the lexicographically smaller one
+# group: [quack]
+
+require rusty_quack
+
+# Criterion 3 / candidate T1: the longest non-NULL input wins.
+query T
+SELECT rusty_longest(s) FROM (VALUES ('a'), ('ccc'), ('bb'), (NULL)) v(s);
+----
+ccc
+
+# Empty input gives NULL.
+query T
+SELECT rusty_longest(s) FROM (SELECT 'x'::VARCHAR AS s WHERE false);
+----
+NULL
+
+# Ties resolve to the lexicographically smaller string, so the result does not depend on input order.
+query T
+SELECT rusty_longest(s) FROM (VALUES ('zz'), ('aa'), ('mm')) v(s);
+----
+aa
