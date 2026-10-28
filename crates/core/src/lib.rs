@@ -25,7 +25,7 @@ impl ScalarInitCallbacks for EchoScalar {
         _bind_data: Option<&Self::BindData>,
         _context: &duckdb_neo::connection::Context,
     ) -> Result<Self::InitData> {
-        return Ok("🦀".into());
+        Ok("🦀".into())
     }
 }
 
@@ -101,7 +101,7 @@ impl TableFunctionCallbacks for EchoTable {
         bind_handle.add_result_column("concat_name", &String::logical_type(context)?)?;
         bind_handle.add_result_column("total_index", &u64::logical_type(context)?)?;
 
-        let arg = arguments.get(0).unwrap();
+        let arg = arguments.first().unwrap();
 
         let value = arg.value.as_ref();
 
