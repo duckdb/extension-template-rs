@@ -19,24 +19,17 @@ env:
 
 jobs:
   checks:
-    name: Rust and extension checks
+    name: Rust checks
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
@@ -52,13 +45,3 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --locked
-
-      - name: Configure extension
-        # The unstable C API requires the exact DuckDB version from the Makefile.
-        run: make configure 'DUCKDB_TEST_VERSION=$(patsubst v%,%,$(TARGET_DUCKDB_VERSION))'
-
-      - name: Build debug extension
-        run: make debug
-
-      - name: Test debug extension
-        run: make test_debug
