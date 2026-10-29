@@ -12,6 +12,7 @@ use duckdb_neo::{
     scalar::{ScalarCallbacks, ScalarFunctionBuilder, ScalarInitCallbacks},
     signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
     table_function::{TableFunctionBuilder, TableFunctionCallbacks},
+    types::List,
 };
 
 struct EchoScalar {
@@ -24,7 +25,7 @@ impl ScalarInitCallbacks for EchoScalar {
         _bind_data: Option<&Self::BindData>,
         _context: &duckdb_neo::connection::Context,
     ) -> Result<Self::InitData> {
-        return Ok("🦀".into());
+        Ok("🦀".into())
     }
 }
 
@@ -68,7 +69,7 @@ struct EchoTable {
 impl TableFunctionCallbacks for EchoTable {
     type GlobalState = AtomicU64;
     type LocalState = String;
-    type BindData = Mutex<Vec<Option<String>>>;
+    type BindData = Mutex<List<String>>;
 
     fn init_global_state(
         &self,
@@ -100,16 +101,16 @@ impl TableFunctionCallbacks for EchoTable {
         bind_handle.add_result_column("concat_name", &String::logical_type(context)?)?;
         bind_handle.add_result_column("total_index", &u64::logical_type(context)?)?;
 
-        let arg = arguments.get(0).unwrap();
+        let arg = arguments.first().unwrap();
 
         let value = arg.value.as_ref();
 
         assert_eq!(
             arg.logical_type.type_id(),
-            <Vec<String>>::logical_type(&context)?.type_id()
+            <List<String>>::logical_type(&context)?.type_id()
         );
 
-        let items = <Vec<Option<String>>>::from_value(value.unwrap())?.unwrap_or_default();
+        let items = <List<String>>::from_value(value.unwrap())?.unwrap_or_default();
 
         Ok(Mutex::new(items))
     }
@@ -129,7 +130,7 @@ impl TableFunctionCallbacks for EchoTable {
         let mut concat_name = concat_name.cast::<String>()?;
         let mut total_index = total_index.cast::<u64>()?;
 
-        let bind_data_len = bind_data.lock().unwrap().len();
+        let bind_data_len = bind_data.lock().unwrap().0.len();
 
         name.set_size(bind_data_len)?;
         icon.set_size(bind_data_len)?;
@@ -144,7 +145,7 @@ impl TableFunctionCallbacks for EchoTable {
         let mut index = 0;
         let local_concat = local_state.unwrap();
 
-        while let Some(name) = bind_data.lock().unwrap().pop() {
+        while let Some(name) = bind_data.lock().unwrap().0.pop() {
             match name {
                 None => {
                     name_writer.set(index, None)?;
@@ -194,7 +195,7 @@ pub fn register(extension: &Extension) -> Result<()> {
 
     TableFunctionBuilder::new(
         "rusty_quack",
-        SignatureBuilder::new().param(FunctionParameter::new::<Vec<String>>("names")),
+        SignatureBuilder::new().param(FunctionParameter::new::<List<String>>("names")),
         EchoTable {
             icons: vec!["🐤".into(), "🦀".into(), "🐥".into()],
         },
