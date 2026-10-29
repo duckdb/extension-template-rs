@@ -1,0 +1,30 @@
+# name: test/sql/rusty_docs.test
+# description: every function the extension registers is documented in duckdb_functions()
+# group: [quack]
+
+require rusty_quack
+
+# Criterion 4 / candidate T9: the functions and their kinds. DISTINCT folds overloads.
+query TT
+SELECT DISTINCT function_name, function_type
+FROM duckdb_functions()
+WHERE function_name LIKE 'rusty\_%' ESCAPE '\'
+ORDER BY function_name, function_type;
+----
+rusty_echo	scalar
+rusty_longest	aggregate
+rusty_quack	table
+rusty_sequence	table
+
+# Every function has a description, at least one example, and no auto-generated parameter name.
+query I
+SELECT count(*)
+FROM duckdb_functions()
+WHERE function_name LIKE 'rusty\_%' ESCAPE '\'
+  AND (
+    description IS NULL
+    OR coalesce(len(examples), 0) = 0
+    OR len(list_filter(parameters, lambda p: regexp_matches(p, '^col[0-9]+$'))) > 0
+  );
+----
+0

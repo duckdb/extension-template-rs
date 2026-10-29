@@ -1,0 +1,26 @@
+# name: test/sql/rusty_sequence.test
+# description: rusty_sequence table function: chunked output and filter pushdown
+# group: [quack]
+
+require rusty_quack
+
+# Criterion 3 / candidate T2: 5000 rows cross the 2048-row chunk boundary several times.
+query II
+SELECT count(*), max(i) FROM rusty_sequence(5000);
+----
+5000	4999
+
+# Criterion 5 / candidate T3: `i < constant` is claimed by the function and the result stays exact.
+query I
+SELECT count(*) FROM rusty_sequence(5000) WHERE i < 10;
+----
+10
+
+# Criterion 5 / candidate T3: projecting only `i`. This query cannot observe whether `label`
+# was skipped; the projection itself is checked with EXPLAIN in the evidence.
+query I
+SELECT i FROM rusty_sequence(3) ORDER BY i;
+----
+0
+1
+2
