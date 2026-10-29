@@ -29,6 +29,7 @@ use duckdb_neo::{
     extension::Extension,
     signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
     table_function::{BindFunctionHandle, ExecColumnInfo, InitColumnData, TableFunctionBuilder, TableFunctionCallbacks},
+    types::List,
 };
 
 use crate::CATEGORY;
@@ -93,12 +94,13 @@ impl TableFunctionCallbacks for EchoTable {
             .ok_or_else(|| Error::invalid_input("rusty_quack expects one argument"))?;
 
         // A bind callback reports problems by returning an error; a panic would be an internal error instead.
-        if arg.logical_type.id()? != <Vec<String>>::logical_type(context)?.id()? {
+        if arg.logical_type.id()? != <List<String>>::logical_type(context)?.id()? {
             return Err(Error::invalid_input("rusty_quack expects a VARCHAR[] argument"));
         }
 
         let items = match &arg.value {
-            Some(value) => <Vec<Option<String>>>::from_value(value)?.unwrap_or_default(),
+            // `List<T>` wraps `Vec<Option<T>>`; a NULL list binds as an empty one.
+            Some(value) => <List<String>>::from_value(value)?.unwrap_or_default().0,
             None => Vec::new(),
         };
 
@@ -174,7 +176,7 @@ pub fn register(extension: &Extension) -> Result<()> {
     TableFunctionBuilder::new(
         "rusty_quack",
         SignatureBuilder::new()
-            .param(FunctionParameter::new::<Vec<String>>("names"))
+            .param(FunctionParameter::new::<List<String>>("names"))
             .documentation(
                 FunctionDocumentationBuilder::new()
                     .description("One row per name, last name first, with a rotating icon and the names seen so far.")
