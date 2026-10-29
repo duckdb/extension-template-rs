@@ -38,8 +38,10 @@ use crate::CATEGORY;
 const COLUMN_I: usize = 0;
 const COLUMN_LABEL: usize = 1;
 
+/// The registered implementation; it has no fields, so all state lives in bind data and global state.
 struct Sequence;
 
+/// What `bind` computes once per call site; every later callback receives it.
 struct SequenceBind {
     count: u64,
     step: i64,
@@ -70,8 +72,14 @@ impl TableFunctionCallbacks for Sequence {
     type BindData = SequenceBind;
     /// The next row to hand out, shared by every worker of the scan.
     type GlobalState = AtomicU64;
+    /// Nothing per worker: every call claims its slice from the global cursor.
     type LocalState = ();
 
+    /// Runs once when the query is bound. Typical work:
+    /// - Read and validate the constant arguments; reject what the function cannot handle.
+    /// - Declare the result columns with `add_result_column`, in the order the column
+    ///   constants above use.
+    /// - Tell the optimizer what is known up front, such as an exact cardinality.
     fn bind(
         &self,
         context: &Context,
@@ -103,6 +111,10 @@ impl TableFunctionCallbacks for Sequence {
         })
     }
 
+    /// Runs once per scan. Typical work:
+    /// - Create the state every worker shares; here the cursor, an atomic so workers
+    ///   can claim slices without a lock.
+    /// - Return a thread limit as the second value, or `None` for DuckDB's default.
     fn init_global_state(
         &self,
         _bind_data: &Self::BindData,
@@ -112,6 +124,7 @@ impl TableFunctionCallbacks for Sequence {
         Ok((Some(AtomicU64::new(0)), None))
     }
 
+    /// Runs once per worker. This function needs no per-worker state, so it returns `None`.
     fn init_local_state(
         &self,
         _bind_data: &Self::BindData,
@@ -122,6 +135,10 @@ impl TableFunctionCallbacks for Sequence {
         Ok(None)
     }
 
+    /// Runs whenever DuckDB asks how far the scan is, only when registered with
+    /// `with_progress`. Typical work:
+    /// - Compare the shared cursor with the total, and return a fraction from `0.0` to `1.0`.
+    /// - Return `None` when progress cannot be estimated.
     fn progress(
         &self,
         bind_data: &Self::BindData,
@@ -138,6 +155,14 @@ impl TableFunctionCallbacks for Sequence {
         Ok(Some(done as f64 / bind_data.count as f64))
     }
 
+    /// Runs until the output chunk stays empty, possibly on several workers at once.
+    /// Typical work:
+    /// - Claim the next slice of work from the global state.
+    /// - Apply the filters accepted in `pushdown_filter`, so no emitted row violates them.
+    /// - Fill only the columns in `columns`: with projection pushdown, output position `i`
+    ///   maps to declared column `columns.get_column_index(i)`.
+    /// - Leave the chunk empty once there is nothing left; an empty chunk ends the scan,
+    ///   so a slice that filters down to nothing must not be returned as-is.
     fn exec(
         &self,
         bind_data: &Self::BindData,
@@ -192,7 +217,15 @@ impl TableFunctionCallbacks for Sequence {
 }
 
 impl TableFilterPushdownCallbacks for Sequence {
-    /// Claim `i < constant`; anything else is left for DuckDB to apply.
+    /// Runs once per scan, between `bind` and `init_global_state`, only when registered with
+    /// `with_filter_pushdown`. Typical work:
+    /// - Walk the filter expressions and inspect their shape (comparison, column reference,
+    ///   constant).
+    /// - Record the ones the function will enforce in the bind data (hence the `Mutex`),
+    ///   and call `accept_pushdown` so DuckDB drops its own copy.
+    /// - Leave everything else unclaimed; DuckDB still applies it after the scan.
+    ///
+    /// Here only `i < constant` is claimed.
     fn pushdown_filter(
         &self,
         bind_data: &Self::BindData,

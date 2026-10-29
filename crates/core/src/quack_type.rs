@@ -1,9 +1,13 @@
 //! A custom type and a cast into it: `3::QUACK`.
 //!
-//! [`CustomType`] registers `QUACK` as a named alias of `VARCHAR`, so it can
-//! be used in `CAST` and column definitions. [`CastFunctionBuilder`] adds the
-//! `INTEGER -> QUACK` conversion; [`CastMode`] tells the callback whether a
-//! failing row must raise an error (`CAST`) or become NULL (`TRY_CAST`).
+//! Two registrations work together:
+//!
+//! 1. [`CustomType`] registers `QUACK` as a named alias of `VARCHAR`, so it can
+//!    be used in `CAST` and column definitions.
+//! 2. [`CastFunctionBuilder`] adds the `INTEGER -> QUACK` conversion, with
+//!    [`CastFunctionCallbacks::exec`] as the only callback; DuckDB runs it once
+//!    per input chunk. [`CastMode`] tells it whether a failing row must raise an
+//!    error (`CAST`) or become NULL (`TRY_CAST`).
 
 use duckdb_neo::{
     DuckDBType, Result,
@@ -21,12 +25,19 @@ pub const TYPE_NAME: &str = "QUACK";
 /// The largest integer the cast accepts.
 const MAX_QUACKS: i32 = 10;
 
+/// The registered implementation of the `INTEGER -> QUACK` cast.
 struct IntegerToQuack;
 
 impl CastFunctionCallbacks for IntegerToQuack {
+    /// The Rust type of the source vector; it fixes the source logical type (`INTEGER`).
     type InputType = i32;
+    /// The Rust type of the target vector; `QUACK` is stored as `VARCHAR`, so `String`.
     type OutputType = String;
 
+    /// Runs once per input chunk. Typical work:
+    /// - Size the output to the input, then read and write row by row, `None` for NULL.
+    /// - On a row that cannot convert, consult `mode`: return an error for `CAST`,
+    ///   write `None` for `TRY_CAST`.
     fn exec(
         &self,
         _context: &Context,

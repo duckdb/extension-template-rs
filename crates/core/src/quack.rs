@@ -1,10 +1,19 @@
 //! A table function with state: `rusty_quack(names)`.
 //!
-//! [`TableFunctionCallbacks::bind`] reads a constant `VARCHAR[]` argument and
-//! declares the result columns. Global state (one per scan, shared by all
-//! workers) hands out icons; local state (one per worker) accumulates the
-//! names a worker has seen. This is the template's original example; see
-//! [`crate::sequence`] for a function that emits more than one chunk.
+//! [`TableFunctionCallbacks`] is the lifecycle DuckDB runs for a table
+//! function. DuckDB calls back in this order:
+//!
+//! 1. `bind` runs once per call site in a query, reads the constant arguments
+//!    and declares the result columns.
+//! 2. `init_global_state` runs once per scan and creates state shared by all
+//!    workers; here it hands out icons.
+//! 3. `init_local_state` runs once per worker; here it accumulates the names
+//!    a worker has seen.
+//! 4. `exec` runs repeatedly, possibly on several workers, until a call leaves
+//!    the output chunk empty.
+//!
+//! This is the template's original example; see [`crate::sequence`] for a
+//! function that emits more than one chunk.
 
 use std::sync::{
     Mutex,
@@ -24,15 +33,23 @@ use duckdb_neo::{
 
 use crate::CATEGORY;
 
+/// The registered implementation; the icons are fixed at registration time.
 struct EchoTable {
     icons: Vec<String>,
 }
 
 impl TableFunctionCallbacks for EchoTable {
+    /// Shared by every worker of one scan; here a counter that picks the next icon.
     type GlobalState = AtomicU64;
+    /// Owned by one worker; here the names it has emitted so far, joined with `|`.
     type LocalState = String;
+    /// Whatever `bind` computes once per call site; here the remaining names.
+    /// A `Mutex` because bind data is shared and `exec` pops from it.
     type BindData = Mutex<Vec<Option<String>>>;
 
+    /// Runs once per scan, after `bind`. Typical work:
+    /// - Create state every worker shares, such as a cursor or a counter.
+    /// - Return a thread limit as the second value, or `None` for DuckDB's default.
     fn init_global_state(
         &self,
         _bind_data: &Self::BindData,
@@ -42,6 +59,9 @@ impl TableFunctionCallbacks for EchoTable {
         Ok((Some(0.into()), None))
     }
 
+    /// Runs once per worker, after `init_global_state`. Typical work:
+    /// - Create per-worker scratch space, such as buffers or a file handle.
+    /// - Return `None` when the worker needs nothing of its own.
     fn init_local_state(
         &self,
         _bind_data: &Self::BindData,
@@ -52,6 +72,11 @@ impl TableFunctionCallbacks for EchoTable {
         Ok(Some("".into()))
     }
 
+    /// Runs once when the query is bound. Typical work:
+    /// - Declare the result columns with `add_result_column`, in the order `exec` fills them.
+    /// - Validate the argument types and constant values, returning an error for what
+    ///   the function cannot handle.
+    /// - Return as `BindData` whatever the later callbacks need.
     fn bind(
         &self,
         context: &Context,
@@ -80,6 +105,12 @@ impl TableFunctionCallbacks for EchoTable {
         Ok(Mutex::new(items))
     }
 
+    /// Runs until the output chunk stays empty. Typical work:
+    /// - Take the output vectors, narrow each to its declared type, and size them.
+    /// - Fill rows from the bind data and the states, `None` for NULL.
+    /// - Leave the chunk empty (or `set_size(0)`) once there is nothing left.
+    ///
+    /// Here one call emits every remaining name, so the second call ends the scan.
     fn exec(
         &self,
         bind_data: &Self::BindData,
