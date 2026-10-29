@@ -8,5 +8,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 duckdb-neo.workspace = true
-duckdb-loadable-macros.workspace = true
 rusty_quack_core.workspace = true
