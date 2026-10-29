@@ -116,14 +116,35 @@ SELECT * FROM rusty_quack(['Jane', 'Doe', 'Loves', 'Ducks']);
 └─────────┴─────────┴───────────────────────┴─────────────┘
 ```
 
-`EXPLAIN` shows the optimizer hooks at work: a filter on `i < constant` disappears from the plan because
-`rusty_sequence` claims it, and the scan lists only the projected columns.
+`EXPLAIN` shows the optimizer hooks at work. The scan lists only the projected columns, and there is
+no `Filter` node: `rusty_sequence` claimed `i < 5` in `pushdown_filter`, so DuckDB dropped its own copy
+and the function enforces the filter while scanning.
 
 ```sql
 EXPLAIN SELECT i FROM rusty_sequence(10000) WHERE i < 5;
 ```
 
 ```
+╭─ Rusty Sequence ─────────╮
+│ Function: RUSTY_SEQUENCE │
+│ Projections: i           │
+│ ~10,000 rows             │
+╰──────────────────────────╯
+```
+
+The `~10,000 rows` is the cardinality that `bind` declared with `set_cardinality`; it is reported before
+any filter is pushed down and cannot be revised afterwards, so it stays at the full count even though the
+query returns 5 rows. A filter the function does not claim keeps its own node:
+
+```sql
+EXPLAIN SELECT i FROM rusty_sequence(10000) WHERE i > 9995;
+```
+
+```
+╭─ Filter ─────────────────╮
+│ Expression: i > 9995     │
+│ ~2,000 rows              │
+╰─────────────┬────────────╯
 ╭─ Rusty Sequence ─────────╮
 │ Function: RUSTY_SEQUENCE │
 │ Projections: i           │
