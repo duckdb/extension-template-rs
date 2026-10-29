@@ -28,7 +28,10 @@ use duckdb_neo::{
     error::Error,
     extension::Extension,
     signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
-    table_function::{BindFunctionHandle, ExecColumnInfo, InitColumnData, TableFunctionBuilder, TableFunctionCallbacks},
+    table_function::{
+        BindFunctionHandle, ExecColumnInfo, InitColumnData, TableFunctionBuilder,
+        TableFunctionCallbacks,
+    },
     types::List,
 };
 
@@ -95,7 +98,9 @@ impl TableFunctionCallbacks for EchoTable {
 
         // A bind callback reports problems by returning an error; a panic would be an internal error instead.
         if arg.logical_type.id()? != <List<String>>::logical_type(context)?.id()? {
-            return Err(Error::invalid_input("rusty_quack expects a VARCHAR[] argument"));
+            return Err(Error::invalid_input(
+                "rusty_quack expects a VARCHAR[] argument",
+            ));
         }
 
         let items = match &arg.value {

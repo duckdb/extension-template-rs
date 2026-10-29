@@ -40,7 +40,8 @@ fn keep_longer(state: &mut Option<String>, candidate: &str) {
         None => true,
         Some(current) => {
             let (candidate_len, current_len) = (candidate.chars().count(), current.chars().count());
-            candidate_len > current_len || (candidate_len == current_len && candidate < current.as_str())
+            candidate_len > current_len
+                || (candidate_len == current_len && candidate < current.as_str())
         }
     };
     if replace {

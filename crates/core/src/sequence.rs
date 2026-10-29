@@ -27,8 +27,8 @@ use duckdb_neo::{
     extension::Extension,
     signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
     table_function::{
-        BindFunctionHandle, ExecColumnInfo, InitColumnData, PushdownData, TableFilterPushdownCallbacks,
-        TableFunctionBuilder, TableFunctionCallbacks,
+        BindFunctionHandle, ExecColumnInfo, InitColumnData, PushdownData,
+        TableFilterPushdownCallbacks, TableFunctionBuilder, TableFunctionCallbacks,
     },
 };
 
@@ -61,8 +61,14 @@ impl SequenceBind {
 }
 
 /// Read argument `index` as `T`, treating SQL NULL as `None`.
-fn argument<T: duckdb_neo::FromValue>(arguments: &[BindArgument], index: usize) -> Result<Option<T>> {
-    match arguments.get(index).and_then(|argument| argument.value.as_ref()) {
+fn argument<T: duckdb_neo::FromValue>(
+    arguments: &[BindArgument],
+    index: usize,
+) -> Result<Option<T>> {
+    match arguments
+        .get(index)
+        .and_then(|argument| argument.value.as_ref())
+    {
         Some(value) => value.get::<T>(),
         None => Ok(None),
     }
@@ -88,16 +94,28 @@ impl TableFunctionCallbacks for Sequence {
     ) -> Result<Self::BindData> {
         let count = match argument::<i64>(&arguments, 0)? {
             None => 0,
-            Some(count) if count < 0 => return Err(Error::invalid_input("rusty_sequence: count must not be negative")),
+            Some(count) if count < 0 => {
+                return Err(Error::invalid_input(
+                    "rusty_sequence: count must not be negative",
+                ));
+            }
             Some(count) => count as u64,
         };
         let step = argument::<i64>(&arguments, 1)?.unwrap_or(1);
         if step == 0 {
-            return Err(Error::invalid_input("rusty_sequence: step must not be zero"));
+            return Err(Error::invalid_input(
+                "rusty_sequence: step must not be zero",
+            ));
         }
         // Every value is `row * step` with `row < count`, so the last row bounds them all.
-        if count > 0 && (count - 1).checked_mul(step.unsigned_abs()).is_none_or(|last| last > i64::MAX as u64) {
-            return Err(Error::invalid_input("rusty_sequence: count * step does not fit in a BIGINT"));
+        if count > 0
+            && (count - 1)
+                .checked_mul(step.unsigned_abs())
+                .is_none_or(|last| last > i64::MAX as u64)
+        {
+            return Err(Error::invalid_input(
+                "rusty_sequence: count * step does not fit in a BIGINT",
+            ));
         }
 
         bind_handle.add_result_column("i", &i64::logical_type(context)?)?;
@@ -172,7 +190,8 @@ impl TableFunctionCallbacks for Sequence {
         mut output: DataChunkRef<'_>,
         columns: ExecColumnInfo<'_>,
     ) -> Result<()> {
-        let cursor = global_state.ok_or_else(|| Error::internal("rusty_sequence: missing global state"))?;
+        let cursor =
+            global_state.ok_or_else(|| Error::internal("rusty_sequence: missing global state"))?;
         let capacity = output.capacity()? as u64;
         let limit = *bind_data.limit.lock().unwrap();
 
@@ -209,7 +228,11 @@ impl TableFunctionCallbacks for Sequence {
                         writer.set(index, Some(&format!("row {}", bind_data.value_at(row))))?;
                     }
                 }
-                other => return Err(Error::internal(format!("rusty_sequence: unknown column {other}"))),
+                other => {
+                    return Err(Error::internal(format!(
+                        "rusty_sequence: unknown column {other}"
+                    )));
+                }
             }
         }
         Ok(())
@@ -234,7 +257,9 @@ impl TableFilterPushdownCallbacks for Sequence {
     ) -> Result<()> {
         for index in 0..pushdown_data.filter_count()? {
             let filter = pushdown_data.filter(index)?;
-            if filter.expression_type()? != ExpressionType::CompareLessThan || filter.child_count()? != 2 {
+            if filter.expression_type()? != ExpressionType::CompareLessThan
+                || filter.child_count()? != 2
+            {
                 continue;
             }
             let (column, constant) = (filter.child(0)?, filter.child(1)?);

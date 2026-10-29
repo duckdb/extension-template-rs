@@ -75,5 +75,6 @@ pub fn register(extension: &Extension) -> Result<()> {
 
     // The cast targets the aliased type, so `typeof(3::QUACK)` reports QUACK rather than VARCHAR.
     let quack = base.with_alias(extension, TYPE_NAME)?;
-    CastFunctionBuilder::new(i32::logical_type(extension)?, quack, IntegerToQuack).register(extension)
+    CastFunctionBuilder::new(i32::logical_type(extension)?, quack, IntegerToQuack)
+        .register(extension)
 }
