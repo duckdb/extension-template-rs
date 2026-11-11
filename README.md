@@ -61,9 +61,6 @@ to the `build/debug` directory.
 
 To create optimized release binaries, simply run `make release` instead.
 
-### WASM
-
-To build for WASM targets, please run `make wasm_eh`. This will create `./build/wasm_eh/release/rusty_quack.duckdb_extension.wasm`, that can then be used inside nodejs or an browser.
 ### Running the extension
 To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.
 
@@ -72,6 +69,20 @@ duckdb -unsigned -cmd "LOAD '$PWD/build/debug/extension/rusty_quack/rusty_quack.
 ```
 
 The extension must be loaded into the exact DuckDB version it was built for (`TARGET_DUCKDB_VERSION` in the Makefile).
+
+### WASM
+
+To build for WASM targets, run `make wasm_eh`. This will create `./build/wasm_eh/release/rusty_quack.duckdb_extension.wasm`, that can then be used inside nodejs or an browser.
+
+### Running the extension (WASM)
+In this template there is an helper server that will locally host your extension. Just run
+```bash
+python3 scripts/host_wasm_target.py
+```
+Followed by opening https://shell.duckdb.org/?allowUnsignedExtensions=true, and loading the extension in:
+```bash
+INSTALL AND LOAD 'http://127.0.0.1:8000/rusty_quack.duckdb_extension.wasm';
+```
 
 ### What the extension registers
 
