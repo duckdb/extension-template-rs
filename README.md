@@ -1,7 +1,7 @@
 # DuckDB Rust extension template
-This is an **experimental** template for Rust based extensions based on the C Extension API of DuckDB. The goal is to
-turn this eventually into a stable basis for pure-Rust DuckDB extensions that can be submitted to the Community extensions
-repository
+This is an template for Rust based extensions based on the V2 C API of DuckDB. This repository will become a stable basis for pure-Rust DuckDB extensions that can be submitted to the Community extensions repository. 
+
+It contains build pipelines for dynamic and wasm-based extensions. It is prefilled with example functions, so you can have an quick start with duckdb-neo!
 
 Features:
 - No DuckDB build required
