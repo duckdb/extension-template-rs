@@ -4,7 +4,7 @@
 //! function. DuckDB calls back in this order:
 //!
 //! 1. `bind` runs once per call site in a query, reads the constant arguments
-//!    and declares the result columns.
+//!    and the [`crate::options`] setting, and declares the result columns.
 //! 2. `init_global_state` runs once per scan and creates state shared by all
 //!    workers; here it hands out icons.
 //! 3. `init_local_state` runs once per worker; here it accumulates the names
@@ -35,10 +35,17 @@ use duckdb_neo::{
     types::List,
 };
 
-use crate::CATEGORY;
+use crate::{CATEGORY, options::QUACK_EMOJIS};
 
-/// The registered implementation; the icons are fixed at registration time.
+/// The registered implementation; `cap` limits how many of the configured icons rotate.
 struct EchoTable {
+    cap: usize,
+}
+
+/// Computed once per call site by `bind`.
+struct EchoBindData {
+    /// A `Mutex` because bind data is shared and `exec` pops from it.
+    names: Mutex<Vec<Option<String>>>,
     icons: Vec<String>,
 }
 
@@ -47,9 +54,8 @@ impl TableFunctionCallbacks for EchoTable {
     type GlobalState = AtomicU64;
     /// Owned by one worker; here the names it has emitted so far, joined with `|`.
     type LocalState = String;
-    /// Whatever `bind` computes once per call site; here the remaining names.
-    /// A `Mutex` because bind data is shared and `exec` pops from it.
-    type BindData = Mutex<Vec<Option<String>>>;
+    /// Whatever `bind` computes once per call site; here the remaining names and the icons.
+    type BindData = EchoBindData;
 
     /// Runs once per scan, after `bind`. Typical work:
     /// - Create state every worker shares, such as a cursor or a counter.
@@ -92,6 +98,18 @@ impl TableFunctionCallbacks for EchoTable {
         bind_handle.add_result_column("concat_name", &String::logical_type(context)?)?;
         bind_handle.add_result_column("total_index", &u64::logical_type(context)?)?;
 
+        // Read at bind time so each query uses the setting that was active when it was planned.
+        let (emojis, _) = context.config()?.get_value(QUACK_EMOJIS)?;
+        let icons: Vec<String> = <List<String>>::from_value(&emojis)?
+            .ok_or_else(|| Error::api_error("The emojis must not be NULL"))?
+            .0
+            .into_iter()
+            .flatten()
+            .collect();
+        if icons.is_empty() {
+            return Err(Error::api_error("The emojis must not be empty"));
+        }
+
         let arg = arguments
             .first()
             .ok_or_else(|| Error::invalid_input("rusty_quack expects one argument"))?;
@@ -109,7 +127,10 @@ impl TableFunctionCallbacks for EchoTable {
             None => Vec::new(),
         };
 
-        Ok(Mutex::new(items))
+        Ok(EchoBindData {
+            names: Mutex::new(items),
+            icons,
+        })
     }
 
     /// Runs until the output chunk stays empty. Typical work:
@@ -133,7 +154,7 @@ impl TableFunctionCallbacks for EchoTable {
         let mut concat_name = concat_name.cast::<String>()?;
         let mut total_index = total_index.cast::<u64>()?;
 
-        let bind_data_len = bind_data.lock().unwrap().len();
+        let bind_data_len = bind_data.names.lock().unwrap().len();
 
         name.set_size(bind_data_len)?;
         icon.set_size(bind_data_len)?;
@@ -148,7 +169,9 @@ impl TableFunctionCallbacks for EchoTable {
         let mut index = 0;
         let local_concat = local_state.unwrap();
 
-        while let Some(name) = bind_data.lock().unwrap().pop() {
+        let icon_count = bind_data.icons.len().min(self.cap) as u64;
+
+        while let Some(name) = bind_data.names.lock().unwrap().pop() {
             match name {
                 None => {
                     name_writer.set(index, None)?;
@@ -159,7 +182,7 @@ impl TableFunctionCallbacks for EchoTable {
                 Some(name) => {
                     let icon_index = global_state.unwrap().fetch_add(1, Ordering::AcqRel);
 
-                    let icon = &self.icons[icon_index as usize % self.icons.len()];
+                    let icon = &bind_data.icons[(icon_index % icon_count) as usize];
 
                     local_concat.push_str(&name);
                     local_concat.push('|');
@@ -188,9 +211,7 @@ pub fn register(extension: &Extension) -> Result<()> {
                     .add_example("Four names", "SELECT * FROM rusty_quack(['Jane', 'Doe', 'Loves', 'Ducks'])")
                     .add_category(CATEGORY),
             ),
-        EchoTable {
-            icons: vec!["🐤".into(), "🦀".into(), "🐥".into()],
-        },
+        EchoTable { cap: 3 },
     )
     .register(extension)
 }

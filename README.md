@@ -97,6 +97,7 @@ examples.
 | `aggregate.rs` | aggregate function: init, update, combine, finalize; order-independent | `SELECT rusty_longest(name) FROM t` |
 | `sequence.rs` | chunked table function with projection and filter pushdown, cardinality and progress | `SELECT i FROM rusty_sequence(10000) WHERE i < 10` |
 | `quack_type.rs` | custom type and a cast into it, with `CAST` and `TRY_CAST` semantics | `SELECT 3::QUACK, TRY_CAST(11 AS QUACK)` |
+| `options.rs` | custom setting with validation, read by `rusty_quack` at bind time | `SET quack_emojis = ['🦆', '🦀']` |
 
 ```sql
 SELECT rusty_echo('Jane');

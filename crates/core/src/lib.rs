@@ -14,6 +14,7 @@
 use duckdb_neo::{Result, extension::Extension};
 
 pub mod aggregate;
+pub mod options;
 pub mod quack;
 pub mod quack_type;
 pub mod scalar;
@@ -29,5 +30,6 @@ pub fn register(extension: &Extension) -> Result<()> {
     aggregate::register(extension)?;
     sequence::register(extension)?;
     quack_type::register(extension)?;
+    options::register(extension)?;
     Ok(())
 }
