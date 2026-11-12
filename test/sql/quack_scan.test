@@ -1,0 +1,40 @@
+# name: test/sql/quack_scan.test
+# description: FROM quack is replaced by a subquery
+# group: [quack]
+
+statement error
+SELECT * FROM quack;
+----
+Table with name quack does not exist
+
+require rusty_quack
+
+query T
+SELECT * FROM quack;
+----
+quack
+
+query T
+SELECT quack FROM 'quack';
+----
+quack
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE FROM QUACK);
+----
+quack	VARCHAR
+
+# Qualified names are left alone.
+statement error
+SELECT * FROM main.quack;
+----
+Table with name quack does not exist
+
+# A real table shadows the replacement scan.
+statement ok
+CREATE TABLE quack AS SELECT 42 AS answer;
+
+query I
+SELECT * FROM quack;
+----
+42

@@ -10,13 +10,18 @@
 //! | [`aggregate`] | aggregate function with a full state lifecycle | `SELECT rusty_longest(name) FROM t` |
 //! | [`sequence`] | chunked table function with projection and filter pushdown, cardinality and progress | `FROM rusty_sequence(10000) WHERE i < 10` |
 //! | [`quack_type`] | custom type and a cast into it | `SELECT 3::QUACK` |
+//! | [`options`] | custom setting with validation | `SET quack_emojis = ['🦆']` |
+//! | [`copy`] | copy format for `COPY ... TO` and `COPY ... FROM` | `COPY t TO 'ducks.quackfile'` |
+//! | [`replacement_scan`] | replacement scans to a table function and to a subquery | `FROM 'ducks.quackfile'`, `FROM quack` |
 
 use duckdb_neo::{Result, extension::Extension};
 
 pub mod aggregate;
+pub mod copy;
 pub mod options;
 pub mod quack;
 pub mod quack_type;
+pub mod replacement_scan;
 pub mod scalar;
 pub mod sequence;
 
@@ -31,5 +36,7 @@ pub fn register(extension: &Extension) -> Result<()> {
     sequence::register(extension)?;
     quack_type::register(extension)?;
     options::register(extension)?;
+    copy::register(extension)?;
+    replacement_scan::register(extension)?;
     Ok(())
 }

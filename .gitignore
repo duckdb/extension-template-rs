@@ -5,3 +5,5 @@ configure
 duckdb_unittest_tempdir
 /test/bin
 venv
+# Written by test/sql/quackfile.test, whose __TEST_DIR__ is test/sql
+/test/sql/*.quackfile
