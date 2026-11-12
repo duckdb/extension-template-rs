@@ -100,6 +100,8 @@ examples.
 | `copy.rs` | copy format for `COPY ... TO` and `COPY ... FROM`, picked from the file extension | `COPY t TO 'ducks.quackfile'` |
 | `replacement_scan.rs` | replacement scans: a quackfile path becomes a `read_quackfile` call, `quack` a subquery | `SELECT * FROM 'ducks.quackfile'`, `FROM quack` |
 | `options.rs` | custom setting with validation, read by `rusty_quack` at bind time | `SET quack_emojis = ['🦆', '🦀']` |
+| `macros.rs` | table macro | `SELECT * FROM glaze()` |
+| `pragma.rs` | query pragma with state kept across calls | `PRAGMA duck_count('🦆🦆')` |
 
 ```sql
 SELECT rusty_echo('Jane');
