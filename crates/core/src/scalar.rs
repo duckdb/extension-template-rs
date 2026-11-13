@@ -41,8 +41,8 @@ impl ScalarInitCallbacks for EchoScalar {
     /// The state is handed to every `exec` as `init_data`; here it is the postfix.
     fn init(
         &self,
-        _bind_data: Option<&Self::BindData>,
         _context: &Context,
+        _bind_data: Option<&Self::BindData>,
     ) -> Result<Self::InitData> {
         Ok("🦀".into())
     }
@@ -58,14 +58,14 @@ impl ScalarCallbacks for EchoScalar {
     /// - Narrow `output` to the declared return type with `cast`.
     /// - Size the output to the input row count.
     /// - Read one vector per argument from `vectors`, and write one result per row,
-    ///   `None` for NULL.
+    ///   with `set_null` for NULL.
     ///
     /// `exec` may run on several workers at once, so it must not keep state in `self`.
     fn exec(
         &self,
+        _context: &Context,
         _bind_data: Option<&Self::BindData>,
         init_data: Option<&mut Self::InitData>,
-        _context: &Context,
         vectors: &mut VectorCollection,
         output: Vector<'_, Unknown>,
     ) -> Result<()> {
@@ -82,10 +82,8 @@ impl ScalarCallbacks for EchoScalar {
 
         for (row, value) in reader.iter().enumerate() {
             match value {
-                Some(value) => {
-                    writer.set(row, Some(&format!("{prefix} {value} {postfix} {value}")))?
-                }
-                None => writer.set(row, None)?,
+                Some(value) => writer.set(row, &format!("{prefix} {value} {postfix} {value}"))?,
+                None => writer.set_null(row)?,
             }
         }
         Ok(())

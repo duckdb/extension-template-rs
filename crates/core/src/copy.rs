@@ -30,8 +30,8 @@ use duckdb_neo::{
     column_data_collection::ColumnDataCollection,
     connection::Context,
     copy_function::{
-        CopyFromBindInfo, CopyFromCardinality, CopyFromFunctionCallbacks, CopyFunctionBuilder,
-        CopyToBindInfo, CopyToFunctionCallbacks,
+        CopyFromBindInfo, CopyFromFunctionCallbacks, CopyFunctionBuilder, CopyToBindInfo,
+        CopyToFunctionCallbacks,
     },
     data_chunk::{DataChunk, DataChunkRef},
     error::Error,
@@ -154,9 +154,13 @@ impl CopyToFunctionCallbacks for QuackFile {
             // Column by column, since each cast reuses the one scratch vector.
             for column in 0..chunk.col_count() {
                 let source = chunk.get_vector_at::<Unknown>(column)?;
-                let text = scratch
-                    .get_vector_at_mut::<String>(0)?
-                    .cast_rows(source, context)?;
+                // SAFETY: neither vector is written until the next cast replaces the scratch vector.
+                unsafe {
+                    scratch
+                        .get_vector_at_mut::<String>(0)?
+                        .cast_rows(source, context)?
+                };
+                let text = scratch.get_vector_at_mut::<String>(0)?;
 
                 for (line, value) in lines.iter_mut().zip(text.reader()?.iter()) {
                     if column > 0 {
@@ -301,29 +305,38 @@ impl CopyFromFunctionCallbacks for QuackFile {
     /// Runs once per statement. Typical work:
     /// - Check the target columns and options, returning an error for what the format
     ///   cannot read.
-    /// - Return a cardinality estimate when one is cheap to get; here there is none.
+    /// - Implement `cardinality` when a row count estimate is cheap to get; here there is none.
     fn bind(
         &self,
         _context: &Context,
         file_path: &str,
         bind_info: &CopyFromBindInfo,
-    ) -> Result<(Self::BindData, Option<CopyFromCardinality>)> {
+    ) -> Result<Self::BindData> {
         reject_options(bind_info.option_count()?)?;
-        let bind_data = QuackReadBind {
+        Ok(QuackReadBind {
             path: file_path.to_string(),
             columns: bind_info.column_count()?,
-        };
-        Ok((bind_data, None))
+        })
     }
 
-    /// Runs once per read. Lines must be read in order, so the read is limited to one thread.
+    /// Runs once per read; here it opens the file.
     fn init_global_state(
         &self,
-        bind_data: &Self::BindData,
         context: &Context,
-    ) -> Result<(Option<Self::GlobalState>, Option<NonZeroUsize>)> {
+        bind_data: &Self::BindData,
+    ) -> Result<Option<Self::GlobalState>> {
         let reader = QuackReader::open(context, &bind_data.path)?;
-        Ok((Some(Mutex::new(reader)), NonZeroUsize::new(1)))
+        Ok(Some(Mutex::new(reader)))
+    }
+
+    /// Lines must be read in order, so the read is limited to one thread.
+    fn max_threads(
+        &self,
+        _context: &Context,
+        _bind_data: &Self::BindData,
+        _global_state: Option<&Self::GlobalState>,
+    ) -> Result<Option<NonZeroUsize>> {
+        Ok(NonZeroUsize::new(1))
     }
 
     /// Runs until the output chunk stays empty. Typical work:
@@ -333,10 +346,10 @@ impl CopyFromFunctionCallbacks for QuackFile {
     /// Here each column is decoded to VARCHAR and then cast to the target type.
     fn exec(
         &self,
-        bind_data: &Self::BindData,
-        global_state: Option<&Self::GlobalState>,
-        _local_state: Option<&mut Self::LocalState>,
         context: &Context,
+        bind_data: &Self::BindData,
+        _local_state: Option<&mut Self::LocalState>,
+        global_state: Option<&Self::GlobalState>,
         mut output: DataChunkRef<'_>,
     ) -> Result<()> {
         let rows = global_state
@@ -352,13 +365,15 @@ impl CopyFromFunctionCallbacks for QuackFile {
             text.set_size(rows.len())?;
             let mut writer = text.writer()?;
             for (row, fields) in rows.iter().enumerate() {
-                writer.set(row, fields[column].as_deref())?;
+                writer.set_option(row, fields[column].as_deref())?;
             }
-            drop(writer);
 
-            output
-                .get_vector_at_mut::<Unknown>(column)?
-                .cast_rows(&text, context)?;
+            // SAFETY: `text` is not written again and is dropped with `scratch`.
+            unsafe {
+                output
+                    .get_vector_at_mut::<Unknown>(column)?
+                    .cast_rows(&text, context)?
+            };
         }
         Ok(())
     }

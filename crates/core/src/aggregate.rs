@@ -131,7 +131,7 @@ impl AggregateCallbacks for Longest {
         let mut result = result.cast::<String>()?;
         let mut writer = result.writer()?;
         for (index, state) in states.iter().enumerate() {
-            writer.set(result_offset + index, state.as_deref())?;
+            writer.set_option(result_offset + index, state.as_deref())?;
         }
         Ok(())
     }
