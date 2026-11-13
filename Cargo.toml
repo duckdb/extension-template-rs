@@ -8,7 +8,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-duckdb-neo = { version = "=0.20000.1", features = ["build-extension"] }
+duckdb-neo = { version = "=0.20000.2", features = ["build-extension"] }
 rusty_quack_core = { path = "crates/core" }
 
 [profile.release]

@@ -132,22 +132,22 @@ impl TableFunctionCallbacks for Sequence {
     /// Runs once per scan. Typical work:
     /// - Create the state every worker shares; here the cursor, an atomic so workers
     ///   can claim slices without a lock.
-    /// - Return a thread limit as the second value, or `None` for DuckDB's default.
+    /// - Implement `max_threads` to let more than one worker scan.
     fn init_global_state(
         &self,
-        _bind_data: &Self::BindData,
         _context: &Context,
+        _bind_data: &Self::BindData,
         _column_data: InitColumnData<'_>,
-    ) -> Result<(Option<Self::GlobalState>, Option<usize>)> {
-        Ok((Some(AtomicU64::new(0)), None))
+    ) -> Result<Option<Self::GlobalState>> {
+        Ok(Some(AtomicU64::new(0)))
     }
 
     /// Runs once per worker. This function needs no per-worker state, so it returns `None`.
     fn init_local_state(
         &self,
+        _context: &Context,
         _bind_data: &Self::BindData,
         _global_state: Option<&Self::GlobalState>,
-        _context: &Context,
         _column_data: InitColumnData<'_>,
     ) -> Result<Option<Self::LocalState>> {
         Ok(None)
@@ -159,9 +159,9 @@ impl TableFunctionCallbacks for Sequence {
     /// - Return `None` when progress cannot be estimated.
     fn progress(
         &self,
+        _context: &Context,
         bind_data: &Self::BindData,
         global_state: Option<&Self::GlobalState>,
-        _context: &Context,
     ) -> Result<Option<f64>> {
         let Some(cursor) = global_state else {
             return Ok(None);
@@ -183,10 +183,10 @@ impl TableFunctionCallbacks for Sequence {
     ///   so a slice that filters down to nothing must not be returned as-is.
     fn exec(
         &self,
-        bind_data: &Self::BindData,
-        global_state: Option<&Self::GlobalState>,
-        _local_state: Option<&mut Self::LocalState>,
         _context: &Context,
+        bind_data: &Self::BindData,
+        _local_state: Option<&mut Self::LocalState>,
+        global_state: Option<&Self::GlobalState>,
         mut output: DataChunkRef<'_>,
         columns: ExecColumnInfo<'_>,
     ) -> Result<()> {
@@ -217,7 +217,7 @@ impl TableFunctionCallbacks for Sequence {
                     vector.set_size(rows.len())?;
                     let mut writer = vector.writer()?;
                     for (index, &row) in rows.iter().enumerate() {
-                        writer.set(index, Some(bind_data.value_at(row)))?;
+                        writer.set(index, &bind_data.value_at(row))?;
                     }
                 }
                 COLUMN_LABEL => {
@@ -225,7 +225,7 @@ impl TableFunctionCallbacks for Sequence {
                     vector.set_size(rows.len())?;
                     let mut writer = vector.writer()?;
                     for (index, &row) in rows.iter().enumerate() {
-                        writer.set(index, Some(&format!("row {}", bind_data.value_at(row))))?;
+                        writer.set(index, &format!("row {}", bind_data.value_at(row)))?;
                     }
                 }
                 other => {
@@ -251,8 +251,8 @@ impl TableFilterPushdownCallbacks for Sequence {
     /// Here only `i < constant` is claimed.
     fn pushdown_filter(
         &self,
-        bind_data: &Self::BindData,
         _context: &Context,
+        bind_data: &Self::BindData,
         pushdown_data: PushdownData<'_>,
     ) -> Result<()> {
         for index in 0..pushdown_data.filter_count()? {

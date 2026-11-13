@@ -18,7 +18,7 @@
 //!    since lines must be read in order.
 //! 3. `exec` decodes the next rows until the file ends.
 
-use std::sync::Mutex;
+use std::{num::NonZeroUsize, sync::Mutex};
 
 use duckdb_neo::{
     DuckDBType, Result, ToValue,
@@ -141,22 +141,32 @@ impl TableFunctionCallbacks for ReadQuackfile {
 
     fn init_global_state(
         &self,
-        bind_data: &Self::BindData,
         context: &Context,
+        bind_data: &Self::BindData,
         _column_data: InitColumnData<'_>,
-    ) -> Result<(Option<Self::GlobalState>, Option<usize>)> {
+    ) -> Result<Option<Self::GlobalState>> {
         let reader = QuackReader::open(context, &bind_data.path)?;
-        Ok((Some(Mutex::new(reader)), Some(1)))
+        Ok(Some(Mutex::new(reader)))
+    }
+
+    fn max_threads(
+        &self,
+        _context: &Context,
+        _bind_data: &Self::BindData,
+        _global_state: Option<&Self::GlobalState>,
+        _column_data: InitColumnData<'_>,
+    ) -> Result<Option<NonZeroUsize>> {
+        Ok(NonZeroUsize::new(1))
     }
 
     /// Runs until the output chunk stays empty. Every column is VARCHAR, so the
     /// decoded values are written as they are, without the cast `COPY ... FROM` needs.
     fn exec(
         &self,
-        bind_data: &Self::BindData,
-        global_state: Option<&Self::GlobalState>,
-        _local_state: Option<&mut Self::LocalState>,
         _context: &Context,
+        bind_data: &Self::BindData,
+        _local_state: Option<&mut Self::LocalState>,
+        global_state: Option<&Self::GlobalState>,
         mut output: DataChunkRef<'_>,
         _column_info: ExecColumnInfo<'_>,
     ) -> Result<()> {
@@ -171,7 +181,7 @@ impl TableFunctionCallbacks for ReadQuackfile {
             vector.set_size(rows.len())?;
             let mut writer = vector.writer()?;
             for (row, fields) in rows.iter().enumerate() {
-                writer.set(row, fields[column].as_deref())?;
+                writer.set_option(row, fields[column].as_deref())?;
             }
         }
         Ok(())
