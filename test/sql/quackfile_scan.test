@@ -1,0 +1,106 @@
+# name: test/sql/quackfile_scan.test
+# description: read_quackfile and the replacement scan that reads a quackfile by its path
+# group: [quack]
+
+require rusty_quack
+
+statement ok
+CREATE TABLE ducks AS SELECT * FROM (VALUES ('Hi', 1), (NULL, 2), ('', NULL), ('🦆|x', 4)) v(name, n);
+
+statement ok
+COPY ducks TO '__TEST_DIR__/scan_ducks.quackfile';
+
+# Every column comes back as VARCHAR, named like read_csv without a header; NULL and '' stay apart.
+query TT
+SELECT column0, column1 FROM '__TEST_DIR__/scan_ducks.quackfile';
+----
+Hi	1
+NULL	2
+(empty)	NULL
+🦆|x	4
+
+query TT
+SELECT typeof(column0), typeof(column1) FROM read_quackfile('__TEST_DIR__/scan_ducks.quackfile') LIMIT 1;
+----
+VARCHAR	VARCHAR
+
+# Several chunks, in file order.
+statement ok
+COPY (SELECT i, 'row' || i AS s FROM range(5000) t(i) ORDER BY i) TO '__TEST_DIR__/scan_many.quackfile';
+
+query IIT
+SELECT count(*), sum(column0::BIGINT), bool_and(column1 = 'row' || column0) FROM '__TEST_DIR__/scan_many.quackfile';
+----
+5000	12497500	true
+
+query I
+SELECT bool_and(column0::BIGINT = rn - 1) FROM (SELECT column0, row_number() OVER () AS rn FROM '__TEST_DIR__/scan_many.quackfile');
+----
+true
+
+# Eleven columns get zero-padded names, as in read_csv.
+statement ok
+COPY (SELECT 0 a, 1 b, 2 c, 3 d, 4 e, 5 f, 6 g, 7 h, 8 i, 9 j, 10 k) TO '__TEST_DIR__/scan_wide.quackfile';
+
+query TT
+SELECT column00, column10 FROM '__TEST_DIR__/scan_wide.quackfile';
+----
+0	10
+
+# An empty file reads as one VARCHAR column and no rows, like read_csv.
+statement ok
+COPY (SELECT 'x' AS s WHERE false) TO '__TEST_DIR__/scan_empty.quackfile';
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/scan_empty.quackfile';
+----
+0
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM '__TEST_DIR__/scan_empty.quackfile');
+----
+column0
+
+# A line with the wrong number of fields or a field that is not QUACKS fails with its line number.
+statement ok
+COPY (FROM (VALUES ('QAQQ|QAQQ'), ('QAQQ'))) TO '__TEST_DIR__/scan_short.quackfile' (FORMAT csv, HEADER false);
+
+statement error
+SELECT * FROM '__TEST_DIR__/scan_short.quackfile';
+----
+quackfile line 2: expected 2 fields, found 1
+
+statement ok
+COPY (SELECT 'QAQX') TO '__TEST_DIR__/scan_bad.quackfile' (FORMAT csv, HEADER false);
+
+statement error
+SELECT * FROM '__TEST_DIR__/scan_bad.quackfile';
+----
+quackfile line 1: 'X' is not one of QUACKS
+
+statement error
+SELECT * FROM '__TEST_DIR__/scan_missing.quackfile';
+----
+Cannot open file
+
+# The suffix is matched case-insensitively, so this path is claimed as well.
+statement error
+SELECT * FROM '__TEST_DIR__/scan_missing.QUACKFILE';
+----
+Cannot open file
+
+statement error
+SELECT * FROM read_quackfile(NULL);
+----
+read_quackfile: path must not be NULL
+
+# Names without the suffix are left alone.
+statement error
+SELECT * FROM no_such_table;
+----
+Table with name no_such_table does not exist
+
+statement error
+SELECT * FROM '__TEST_DIR__/scan_ducks.quackfile.txt';
+----
+does not exist

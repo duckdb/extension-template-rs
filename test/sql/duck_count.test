@@ -1,0 +1,37 @@
+# name: test/sql/duck_count.test
+# description: the duck_count pragma keeps a running total of ducks
+# group: [quack]
+
+require rusty_quack
+
+query I
+PRAGMA duck_count('🦆🦆');
+----
+2
+
+query I
+PRAGMA duck_count('🦆');
+----
+3
+
+# No ducks leaves the total as it is.
+query I
+PRAGMA duck_count('');
+----
+3
+
+statement error
+PRAGMA duck_count('🦆🐤');
+----
+duck_count: '🐤' is not a 🦆
+
+statement error
+PRAGMA duck_count(NULL);
+----
+duck_count: the ducks must not be NULL
+
+# A rejected call adds nothing.
+query I
+PRAGMA duck_count('🦆🦆🦆');
+----
+6

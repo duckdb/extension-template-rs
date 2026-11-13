@@ -1,0 +1,65 @@
+# name: test/sql/quack_emojis.test
+# description: The quack_emojis setting feeds the icons of rusty_quack
+# group: [quack]
+
+require rusty_quack
+
+query T
+SELECT current_setting('quack_emojis');
+----
+[🐤, 🦀, 🐥]
+
+statement ok
+SET quack_emojis = ['A', 'B'];
+
+query T
+SELECT icon FROM rusty_quack(['w', 'x', 'y', 'z']) ORDER BY total_index;
+----
+A
+B
+A
+B
+
+# Only the first three icons rotate, however many are configured.
+statement ok
+SET quack_emojis = ['A', 'B', 'C', 'D', 'E'];
+
+query T
+SELECT icon FROM rusty_quack(['v', 'w', 'x', 'y', 'z']) ORDER BY total_index;
+----
+A
+B
+C
+A
+B
+
+statement error
+SET quack_emojis = [];
+----
+The emojis must not be empty
+
+statement error
+SET quack_emojis = NULL;
+----
+The emojis must not be NULL
+
+statement error
+SET quack_emojis = ['A', NULL];
+----
+The emojis must not contain NULL values
+
+# A rejected SET keeps the previous value.
+query T
+SELECT current_setting('quack_emojis');
+----
+[A, B, C, D, E]
+
+statement ok
+RESET quack_emojis;
+
+query T
+SELECT icon FROM rusty_quack(['x', 'y', 'z']) ORDER BY total_index;
+----
+🐤
+🦀
+🐥
