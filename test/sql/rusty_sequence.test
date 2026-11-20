@@ -24,3 +24,47 @@ SELECT i FROM rusty_sequence(3) ORDER BY i;
 0
 1
 2
+
+# `step` can be passed by name or position.
+query I
+SELECT list(i ORDER BY i) FROM rusty_sequence(4, step := 3);
+----
+[0, 3, 6, 9]
+
+query I
+SELECT list(i ORDER BY i) FROM rusty_sequence(4, 3);
+----
+[0, 3, 6, 9]
+
+query I
+SELECT list(i ORDER BY i DESC) FROM rusty_sequence(4, step := -2);
+----
+[0, -2, -4, -6]
+
+# A NULL step falls back to the default.
+query I
+SELECT list(i ORDER BY i) FROM rusty_sequence(4, step := NULL);
+----
+[0, 1, 2, 3]
+
+query II
+SELECT i, label FROM rusty_sequence(2, step := 10) ORDER BY i;
+----
+0	row 0
+10	row 10
+
+# Pushdown of `i < constant` also holds for a step other than 1.
+query I
+SELECT list(i ORDER BY i) FROM rusty_sequence(100, step := 5) WHERE i < 20;
+----
+[0, 5, 10, 15]
+
+statement error
+SELECT * FROM rusty_sequence(4, step := 0);
+----
+step must not be zero
+
+statement error
+SELECT * FROM rusty_sequence(3, step := 9223372036854775807);
+----
+count * step does not fit in a BIGINT
