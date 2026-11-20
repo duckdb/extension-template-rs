@@ -19,9 +19,9 @@ use std::sync::{
 
 use duckdb_neo::{
     DuckDBType, Result,
-    bind_arguments::BindArgument,
+    bind_arguments::BindArguments,
     connection::Context,
-    data_chunk::DataChunkRef,
+    data_chunk::DataChunk,
     error::Error,
     expression::ExpressionType,
     extension::Extension,
@@ -60,20 +60,6 @@ impl SequenceBind {
     }
 }
 
-/// Read argument `index` as `T`, treating SQL NULL as `None`.
-fn argument<T: duckdb_neo::FromValue>(
-    arguments: &[BindArgument],
-    index: usize,
-) -> Result<Option<T>> {
-    match arguments
-        .get(index)
-        .and_then(|argument| argument.value.as_ref())
-    {
-        Some(value) => value.get::<T>(),
-        None => Ok(None),
-    }
-}
-
 impl TableFunctionCallbacks for Sequence {
     type BindData = SequenceBind;
     /// The next row to hand out, shared by every worker of the scan.
@@ -89,19 +75,29 @@ impl TableFunctionCallbacks for Sequence {
     fn bind(
         &self,
         context: &Context,
-        arguments: Vec<BindArgument>,
+        arguments: BindArguments,
         bind_handle: BindFunctionHandle<'_>,
     ) -> Result<Self::BindData> {
-        let count = match argument::<i64>(&arguments, 0)? {
+        let count = match arguments
+            .arg(0)?
+            .resolved_value::<i64>()?
+            .unwrap_or_default()
+        {
             None => 0,
-            Some(count) if count < 0 => {
+            Some(val) if val < 0 => {
                 return Err(Error::invalid_input(
                     "rusty_sequence: count must not be negative",
                 ));
             }
-            Some(count) => count as u64,
+            Some(val) => val as u64,
         };
-        let step = argument::<i64>(&arguments, 1)?.unwrap_or(1);
+
+        let step = arguments
+            .arg(1)?
+            .resolved_value::<i64>()?
+            .flatten()
+            .unwrap_or(1);
+
         if step == 0 {
             return Err(Error::invalid_input(
                 "rusty_sequence: step must not be zero",
@@ -135,19 +131,19 @@ impl TableFunctionCallbacks for Sequence {
     /// - Return a thread limit as the second value, or `None` for DuckDB's default.
     fn init_global_state(
         &self,
-        _bind_data: &Self::BindData,
         _context: &Context,
+        _bind_data: &Self::BindData,
         _column_data: InitColumnData<'_>,
-    ) -> Result<(Option<Self::GlobalState>, Option<usize>)> {
-        Ok((Some(AtomicU64::new(0)), None))
+    ) -> Result<Option<Self::GlobalState>> {
+        Ok(Some(AtomicU64::new(0)))
     }
 
     /// Runs once per worker. This function needs no per-worker state, so it returns `None`.
     fn init_local_state(
         &self,
+        _context: &Context,
         _bind_data: &Self::BindData,
         _global_state: Option<&Self::GlobalState>,
-        _context: &Context,
         _column_data: InitColumnData<'_>,
     ) -> Result<Option<Self::LocalState>> {
         Ok(None)
@@ -159,9 +155,9 @@ impl TableFunctionCallbacks for Sequence {
     /// - Return `None` when progress cannot be estimated.
     fn progress(
         &self,
+        _context: &Context,
         bind_data: &Self::BindData,
         global_state: Option<&Self::GlobalState>,
-        _context: &Context,
     ) -> Result<Option<f64>> {
         let Some(cursor) = global_state else {
             return Ok(None);
@@ -183,11 +179,11 @@ impl TableFunctionCallbacks for Sequence {
     ///   so a slice that filters down to nothing must not be returned as-is.
     fn exec(
         &self,
-        bind_data: &Self::BindData,
-        global_state: Option<&Self::GlobalState>,
-        _local_state: Option<&mut Self::LocalState>,
         _context: &Context,
-        mut output: DataChunkRef<'_>,
+        bind_data: &Self::BindData,
+        _local_state: Option<&mut Self::LocalState>,
+        global_state: Option<&Self::GlobalState>,
+        output: &mut DataChunk,
         columns: ExecColumnInfo<'_>,
     ) -> Result<()> {
         let cursor =
@@ -217,7 +213,7 @@ impl TableFunctionCallbacks for Sequence {
                     vector.set_size(rows.len())?;
                     let mut writer = vector.writer()?;
                     for (index, &row) in rows.iter().enumerate() {
-                        writer.set(index, Some(bind_data.value_at(row)))?;
+                        writer.set(index, &bind_data.value_at(row))?;
                     }
                 }
                 COLUMN_LABEL => {
@@ -225,7 +221,7 @@ impl TableFunctionCallbacks for Sequence {
                     vector.set_size(rows.len())?;
                     let mut writer = vector.writer()?;
                     for (index, &row) in rows.iter().enumerate() {
-                        writer.set(index, Some(&format!("row {}", bind_data.value_at(row))))?;
+                        writer.set(index, &format!("row {}", bind_data.value_at(row)))?;
                     }
                 }
                 other => {
@@ -251,8 +247,8 @@ impl TableFilterPushdownCallbacks for Sequence {
     /// Here only `i < constant` is claimed.
     fn pushdown_filter(
         &self,
-        bind_data: &Self::BindData,
         _context: &Context,
+        bind_data: &Self::BindData,
         pushdown_data: PushdownData<'_>,
     ) -> Result<()> {
         for index in 0..pushdown_data.filter_count()? {

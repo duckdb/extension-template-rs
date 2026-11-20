@@ -10,7 +10,7 @@ USE_UNSTABLE_C_API=1
 CAPI_VERSION=2
 
 # Target DuckDB version
-TARGET_DUCKDB_VERSION=v2.0.0
+TARGET_DUCKDB_VERSION=v2.0.1
 
 all: configure debug
 

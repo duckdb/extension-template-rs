@@ -51,12 +51,12 @@ impl CastFunctionCallbacks for IntegerToQuack {
 
         for (row, value) in reader.iter().enumerate() {
             match value {
-                None => writer.set(row, None)?,
+                None => writer.set_null(row)?,
                 Some(&count) if (0..=MAX_QUACKS).contains(&count) => {
-                    writer.set(row, Some(&"quack".repeat(count as usize)))?
+                    writer.set(row, &"quack".repeat(count as usize))?
                 }
                 Some(count) => match mode {
-                    CastMode::Try => writer.set(row, None)?,
+                    CastMode::Try => writer.set_null(row)?,
                     CastMode::Normal => {
                         return Err(Error::invalid_input(format!(
                             "cannot cast {count} to {TYPE_NAME}: the value must be between 0 and {MAX_QUACKS}"

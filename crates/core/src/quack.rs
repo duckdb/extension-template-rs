@@ -21,11 +21,10 @@ use std::sync::{
 };
 
 use duckdb_neo::{
-    DuckDBType, FromValue, Result,
-    bind_arguments::BindArgument,
+    DuckDBType, Result,
+    bind_arguments::BindArguments,
     connection::Context,
-    data_chunk::DataChunkRef,
-    error::Error,
+    data_chunk::DataChunk,
     extension::Extension,
     signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
     table_function::{
@@ -56,11 +55,11 @@ impl TableFunctionCallbacks for EchoTable {
     /// - Return a thread limit as the second value, or `None` for DuckDB's default.
     fn init_global_state(
         &self,
-        _bind_data: &Self::BindData,
         _context: &Context,
+        _bind_data: &Self::BindData,
         _column_data: InitColumnData<'_>,
-    ) -> Result<(Option<Self::GlobalState>, Option<usize>)> {
-        Ok((Some(0.into()), None))
+    ) -> Result<Option<Self::GlobalState>> {
+        Ok(Some(0.into()))
     }
 
     /// Runs once per worker, after `init_global_state`. Typical work:
@@ -68,9 +67,9 @@ impl TableFunctionCallbacks for EchoTable {
     /// - Return `None` when the worker needs nothing of its own.
     fn init_local_state(
         &self,
+        _context: &Context,
         _bind_data: &Self::BindData,
         _global_state: Option<&Self::GlobalState>,
-        _context: &Context,
         _column_data: InitColumnData<'_>,
     ) -> Result<Option<Self::LocalState>> {
         Ok(Some("".into()))
@@ -84,7 +83,7 @@ impl TableFunctionCallbacks for EchoTable {
     fn bind(
         &self,
         context: &Context,
-        arguments: Vec<BindArgument>,
+        arguments: BindArguments,
         bind_handle: BindFunctionHandle<'_>,
     ) -> Result<Self::BindData> {
         bind_handle.add_result_column("name", &String::logical_type(context)?)?;
@@ -92,22 +91,12 @@ impl TableFunctionCallbacks for EchoTable {
         bind_handle.add_result_column("concat_name", &String::logical_type(context)?)?;
         bind_handle.add_result_column("total_index", &u64::logical_type(context)?)?;
 
-        let arg = arguments
-            .first()
-            .ok_or_else(|| Error::invalid_input("rusty_quack expects one argument"))?;
-
-        // A bind callback reports problems by returning an error; a panic would be an internal error instead.
-        if arg.logical_type.id()? != <List<String>>::logical_type(context)?.id()? {
-            return Err(Error::invalid_input(
-                "rusty_quack expects a VARCHAR[] argument",
-            ));
-        }
-
-        let items = match &arg.value {
-            // `List<T>` wraps `Vec<Option<T>>`; a NULL list binds as an empty one.
-            Some(value) => <List<String>>::from_value(value)?.unwrap_or_default().0,
-            None => Vec::new(),
-        };
+        let items = arguments
+            .arg(0)?
+            .resolved_value::<List<String>>()?
+            .flatten()
+            .unwrap_or_default()
+            .0;
 
         Ok(Mutex::new(items))
     }
@@ -120,11 +109,11 @@ impl TableFunctionCallbacks for EchoTable {
     /// Here one call emits every remaining name, so the second call ends the scan.
     fn exec(
         &self,
-        bind_data: &Self::BindData,
-        global_state: Option<&Self::GlobalState>,
-        local_state: Option<&mut Self::LocalState>,
         _context: &Context,
-        mut output: DataChunkRef<'_>,
+        bind_data: &Self::BindData,
+        local_state: Option<&mut Self::LocalState>,
+        global_state: Option<&Self::GlobalState>,
+        output: &mut DataChunk,
         _column_info: ExecColumnInfo<'_>,
     ) -> Result<()> {
         let [name, icon, concat_name, total_index] = output.get_vector_array_mut([0, 1, 2, 3])?;
@@ -151,10 +140,10 @@ impl TableFunctionCallbacks for EchoTable {
         while let Some(name) = bind_data.lock().unwrap().pop() {
             match name {
                 None => {
-                    name_writer.set(index, None)?;
-                    icon_writer.set(index, None)?;
-                    concat_name_writer.set(index, None)?;
-                    total_index_writer.set(index, None)?;
+                    name_writer.set_null(index)?;
+                    icon_writer.set_null(index)?;
+                    concat_name_writer.set_null(index)?;
+                    total_index_writer.set_null(index)?;
                 }
                 Some(name) => {
                     let icon_index = global_state.unwrap().fetch_add(1, Ordering::AcqRel);
@@ -164,10 +153,10 @@ impl TableFunctionCallbacks for EchoTable {
                     local_concat.push_str(&name);
                     local_concat.push('|');
 
-                    name_writer.set(index, Some(&name))?;
-                    icon_writer.set(index, Some(icon))?;
-                    concat_name_writer.set(index, Some(local_concat))?;
-                    total_index_writer.set(index, Some(index as u64))?;
+                    name_writer.set(index, &name)?;
+                    icon_writer.set(index, icon)?;
+                    concat_name_writer.set(index, local_concat)?;
+                    total_index_writer.set(index, &(index as u64))?;
                 }
             }
             index += 1;
