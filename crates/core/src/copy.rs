@@ -33,7 +33,7 @@ use duckdb_neo::{
         CopyFromBindInfo, CopyFromFunctionCallbacks, CopyFunctionBuilder, CopyToBindInfo,
         CopyToFunctionCallbacks,
     },
-    data_chunk::{DataChunk, DataChunkRef},
+    data_chunk::DataChunk,
     error::Error,
     extension::Extension,
     file::{File, FileBuilder, FileSystem},
@@ -350,7 +350,7 @@ impl CopyFromFunctionCallbacks for QuackFile {
         bind_data: &Self::BindData,
         _local_state: Option<&mut Self::LocalState>,
         global_state: Option<&Self::GlobalState>,
-        mut output: DataChunkRef<'_>,
+        output: &mut DataChunk,
     ) -> Result<()> {
         let rows = global_state
             .ok_or_else(|| Error::internal("quackfile: global state missing"))?

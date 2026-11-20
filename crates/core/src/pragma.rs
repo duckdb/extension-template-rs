@@ -32,9 +32,8 @@ impl PragmaQueryCallbacks for DuckCount {
     /// - Return the SQL to run instead, or an error to reject the statement.
     fn query(&self, _context: &Context, arguments: BindArguments<'_>) -> Result<String> {
         let ducks = arguments
-            .value(0)?
-            .map(|value| value.get::<String>())
-            .transpose()?
+            .arg(0)?
+            .resolved_value::<String>()?
             .flatten()
             .ok_or_else(|| Error::invalid_input("duck_count: the ducks must not be NULL"))?;
 

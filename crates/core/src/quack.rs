@@ -22,9 +22,9 @@ use std::sync::{
 
 use duckdb_neo::{
     DuckDBType, FromValue, Result,
-    bind_arguments::BindArgument,
+    bind_arguments::BindArguments,
     connection::Context,
-    data_chunk::DataChunkRef,
+    data_chunk::DataChunk,
     error::Error,
     extension::Extension,
     signature::{FunctionDocumentationBuilder, FunctionParameter, SignatureBuilder},
@@ -59,7 +59,7 @@ impl TableFunctionCallbacks for EchoTable {
 
     /// Runs once per scan, after `bind`. Typical work:
     /// - Create state every worker shares, such as a cursor or a counter.
-    /// - Implement `max_threads` to let more than one worker scan.
+    /// - The worker count comes from `max_threads`, which defaults to one.
     fn init_global_state(
         &self,
         _context: &Context,
@@ -90,7 +90,7 @@ impl TableFunctionCallbacks for EchoTable {
     fn bind(
         &self,
         context: &Context,
-        arguments: Vec<BindArgument>,
+        arguments: BindArguments,
         bind_handle: BindFunctionHandle<'_>,
     ) -> Result<Self::BindData> {
         bind_handle.add_result_column("name", &String::logical_type(context)?)?;
@@ -110,22 +110,12 @@ impl TableFunctionCallbacks for EchoTable {
             return Err(Error::api_error("The emojis must not be empty"));
         }
 
-        let arg = arguments
-            .first()
-            .ok_or_else(|| Error::invalid_input("rusty_quack expects one argument"))?;
-
-        // A bind callback reports problems by returning an error; a panic would be an internal error instead.
-        if arg.logical_type.id()? != <List<String>>::logical_type(context)?.id()? {
-            return Err(Error::invalid_input(
-                "rusty_quack expects a VARCHAR[] argument",
-            ));
-        }
-
-        let items = match &arg.value {
-            // `List<T>` wraps `Vec<Option<T>>`; a NULL list binds as an empty one.
-            Some(value) => <List<String>>::from_value(value)?.unwrap_or_default().0,
-            None => Vec::new(),
-        };
+        let items = arguments
+            .arg(0)?
+            .resolved_value::<List<String>>()?
+            .flatten()
+            .unwrap_or_default()
+            .0;
 
         Ok(EchoBindData {
             names: Mutex::new(items),
@@ -145,7 +135,7 @@ impl TableFunctionCallbacks for EchoTable {
         bind_data: &Self::BindData,
         local_state: Option<&mut Self::LocalState>,
         global_state: Option<&Self::GlobalState>,
-        mut output: DataChunkRef<'_>,
+        output: &mut DataChunk,
         _column_info: ExecColumnInfo<'_>,
     ) -> Result<()> {
         let [name, icon, concat_name, total_index] = output.get_vector_array_mut([0, 1, 2, 3])?;

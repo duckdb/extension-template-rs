@@ -19,9 +19,9 @@ use std::sync::{
 
 use duckdb_neo::{
     DuckDBType, Result,
-    bind_arguments::BindArgument,
+    bind_arguments::BindArguments,
     connection::Context,
-    data_chunk::DataChunkRef,
+    data_chunk::DataChunk,
     error::Error,
     expression::ExpressionType,
     extension::Extension,
@@ -60,20 +60,6 @@ impl SequenceBind {
     }
 }
 
-/// Read argument `index` as `T`, treating SQL NULL as `None`.
-fn argument<T: duckdb_neo::FromValue>(
-    arguments: &[BindArgument],
-    index: usize,
-) -> Result<Option<T>> {
-    match arguments
-        .get(index)
-        .and_then(|argument| argument.value.as_ref())
-    {
-        Some(value) => value.get::<T>(),
-        None => Ok(None),
-    }
-}
-
 impl TableFunctionCallbacks for Sequence {
     type BindData = SequenceBind;
     /// The next row to hand out, shared by every worker of the scan.
@@ -89,10 +75,10 @@ impl TableFunctionCallbacks for Sequence {
     fn bind(
         &self,
         context: &Context,
-        arguments: Vec<BindArgument>,
+        arguments: BindArguments,
         bind_handle: BindFunctionHandle<'_>,
     ) -> Result<Self::BindData> {
-        let count = match argument::<i64>(&arguments, 0)? {
+        let count = match arguments.arg(0)?.resolved_value::<i64>()?.flatten() {
             None => 0,
             Some(count) if count < 0 => {
                 return Err(Error::invalid_input(
@@ -101,7 +87,13 @@ impl TableFunctionCallbacks for Sequence {
             }
             Some(count) => count as u64,
         };
-        let step = argument::<i64>(&arguments, 1)?.unwrap_or(1);
+
+        let step = arguments
+            .arg(1)?
+            .resolved_value::<i64>()?
+            .flatten()
+            .unwrap_or(1);
+
         if step == 0 {
             return Err(Error::invalid_input(
                 "rusty_sequence: step must not be zero",
@@ -132,7 +124,7 @@ impl TableFunctionCallbacks for Sequence {
     /// Runs once per scan. Typical work:
     /// - Create the state every worker shares; here the cursor, an atomic so workers
     ///   can claim slices without a lock.
-    /// - Implement `max_threads` to let more than one worker scan.
+    /// - The worker count comes from `max_threads`, which defaults to one.
     fn init_global_state(
         &self,
         _context: &Context,
@@ -187,7 +179,7 @@ impl TableFunctionCallbacks for Sequence {
         bind_data: &Self::BindData,
         _local_state: Option<&mut Self::LocalState>,
         global_state: Option<&Self::GlobalState>,
-        mut output: DataChunkRef<'_>,
+        output: &mut DataChunk,
         columns: ExecColumnInfo<'_>,
     ) -> Result<()> {
         let cursor =

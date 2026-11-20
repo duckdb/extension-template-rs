@@ -22,9 +22,9 @@ use std::{num::NonZeroUsize, sync::Mutex};
 
 use duckdb_neo::{
     DuckDBType, Result, ToValue,
-    bind_arguments::BindArgument,
+    bind_arguments::BindArguments,
     connection::Context,
-    data_chunk::DataChunkRef,
+    data_chunk::DataChunk,
     error::Error,
     extension::Extension,
     qualified_name::QualifiedName,
@@ -111,14 +111,12 @@ impl TableFunctionCallbacks for ReadQuackfile {
     fn bind(
         &self,
         context: &Context,
-        arguments: Vec<BindArgument>,
+        arguments: BindArguments,
         bind_handle: BindFunctionHandle<'_>,
     ) -> Result<Self::BindData> {
         let path = arguments
-            .first()
-            .and_then(|argument| argument.value.as_ref())
-            .map(|value| value.get::<String>())
-            .transpose()?
+            .arg(0)?
+            .resolved_value::<String>()?
             .flatten()
             .ok_or_else(|| {
                 Error::invalid_input(format!("{READ_FUNCTION}: path must not be NULL"))
@@ -167,7 +165,7 @@ impl TableFunctionCallbacks for ReadQuackfile {
         bind_data: &Self::BindData,
         _local_state: Option<&mut Self::LocalState>,
         global_state: Option<&Self::GlobalState>,
-        mut output: DataChunkRef<'_>,
+        output: &mut DataChunk,
         _column_info: ExecColumnInfo<'_>,
     ) -> Result<()> {
         let rows = global_state
