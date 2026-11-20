@@ -52,7 +52,7 @@ impl TableFunctionCallbacks for EchoTable {
 
     /// Runs once per scan, after `bind`. Typical work:
     /// - Create state every worker shares, such as a cursor or a counter.
-    /// - Return a thread limit as the second value, or `None` for DuckDB's default.
+    /// - The worker count comes from `max_threads`, which defaults to one.
     fn init_global_state(
         &self,
         _context: &Context,

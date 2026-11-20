@@ -78,18 +78,14 @@ impl TableFunctionCallbacks for Sequence {
         arguments: BindArguments,
         bind_handle: BindFunctionHandle<'_>,
     ) -> Result<Self::BindData> {
-        let count = match arguments
-            .arg(0)?
-            .resolved_value::<i64>()?
-            .unwrap_or_default()
-        {
+        let count = match arguments.arg(0)?.resolved_value::<i64>()?.flatten() {
             None => 0,
-            Some(val) if val < 0 => {
+            Some(count) if count < 0 => {
                 return Err(Error::invalid_input(
                     "rusty_sequence: count must not be negative",
                 ));
             }
-            Some(val) => val as u64,
+            Some(count) => count as u64,
         };
 
         let step = arguments
@@ -128,7 +124,7 @@ impl TableFunctionCallbacks for Sequence {
     /// Runs once per scan. Typical work:
     /// - Create the state every worker shares; here the cursor, an atomic so workers
     ///   can claim slices without a lock.
-    /// - Return a thread limit as the second value, or `None` for DuckDB's default.
+    /// - The worker count comes from `max_threads`, which defaults to one.
     fn init_global_state(
         &self,
         _context: &Context,
