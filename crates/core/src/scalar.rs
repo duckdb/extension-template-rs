@@ -58,7 +58,7 @@ impl ScalarCallbacks for EchoScalar {
     /// - Narrow `output` to the declared return type with `cast`.
     /// - Size the output to the input row count.
     /// - Read one vector per argument from `vectors`, and write one result per row,
-    ///   `None` for NULL.
+    ///   with `set_null` for NULL.
     ///
     /// `exec` may run on several workers at once, so it must not keep state in `self`.
     fn exec(

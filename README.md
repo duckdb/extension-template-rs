@@ -1,7 +1,7 @@
 # DuckDB Rust extension template
-This is an **experimental** template for Rust based extensions based on the C Extension API of DuckDB. The goal is to
-turn this eventually into a stable basis for pure-Rust DuckDB extensions that can be submitted to the Community extensions
-repository
+This is an template for Rust based extensions based on the V2 C API of DuckDB. This repository will become a stable basis for pure-Rust DuckDB extensions that can be submitted to the Community extensions repository. 
+
+It contains build pipelines for dynamic and wasm-based extensions. It is prefilled with example functions, so you can have an quick start with duckdb-neo!
 
 Features:
 - No DuckDB build required
@@ -97,6 +97,11 @@ examples.
 | `aggregate.rs` | aggregate function: init, update, combine, finalize; order-independent | `SELECT rusty_longest(name) FROM t` |
 | `sequence.rs` | chunked table function with projection and filter pushdown, cardinality and progress | `SELECT i FROM rusty_sequence(10000) WHERE i < 10` |
 | `quack_type.rs` | custom type and a cast into it, with `CAST` and `TRY_CAST` semantics | `SELECT 3::QUACK, TRY_CAST(11 AS QUACK)` |
+| `copy.rs` | copy format for `COPY ... TO` and `COPY ... FROM`, picked from the file extension | `COPY t TO 'ducks.quackfile'` |
+| `replacement_scan.rs` | replacement scans: a quackfile path becomes a `read_quackfile` call, `quack` a subquery | `SELECT * FROM 'ducks.quackfile'`, `FROM quack` |
+| `options.rs` | custom setting with validation, read by `rusty_quack` at bind time | `SET quack_emojis = ['🦆', '🦀']` |
+| `macros.rs` | table macro | `SELECT * FROM glaze()` |
+| `pragma.rs` | query pragma with state kept across calls | `PRAGMA duck_count('🦆🦆')` |
 
 ```sql
 SELECT rusty_echo('Jane');

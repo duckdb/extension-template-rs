@@ -1,0 +1,20 @@
+# name: test/sql/glaze.test
+# description: the glaze table macro
+# group: [quack]
+
+require rusty_quack
+
+query T
+SELECT * FROM glaze();
+----
+Rust is awesome!
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE FROM glaze());
+----
+glaze	VARCHAR
+
+statement error
+SELECT glaze();
+----
+is a table function but it was used as a scalar function

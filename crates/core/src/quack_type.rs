@@ -35,9 +35,9 @@ impl CastFunctionCallbacks for IntegerToQuack {
     type OutputType = String;
 
     /// Runs once per input chunk. Typical work:
-    /// - Size the output to the input, then read and write row by row, `None` for NULL.
+    /// - Size the output to the input, then read and write row by row, `set_null` for NULL.
     /// - On a row that cannot convert, consult `mode`: return an error for `CAST`,
-    ///   write `None` for `TRY_CAST`.
+    ///   write NULL for `TRY_CAST`.
     fn exec(
         &self,
         _context: &Context,

@@ -1,0 +1,68 @@
+# name: test/sql/quackfile.test
+# description: COPY TO and FROM the quackfile format
+# group: [quack]
+
+require rusty_quack
+
+statement ok
+CREATE TABLE ducks AS SELECT * FROM (VALUES ('Hi', 1), (NULL, 2), ('', NULL), ('🦆|x', 4)) v(name, n);
+
+# The format follows from the extension, so FORMAT can be left out.
+statement ok
+COPY ducks TO '__TEST_DIR__/ducks.quackfile';
+
+# Each byte is four digits of QUACKS; non-VARCHAR columns are cast first and NULL is '-'.
+query T
+SELECT unnest(string_split(rtrim(content, chr(10)), chr(10))) FROM read_text('__TEST_DIR__/ducks.quackfile');
+----
+QAQQQASC|QUAU
+-|QUAA
+|-
+UQKQQKACQKCKQCKAQCAKQCAQ|QUAK
+
+statement ok
+CREATE TABLE copied (name VARCHAR, n INTEGER);
+
+statement ok
+COPY copied FROM '__TEST_DIR__/ducks.quackfile';
+
+query TI
+SELECT * FROM copied ORDER BY n NULLS LAST;
+----
+Hi	1
+NULL	2
+🦆|x	4
+(empty)	NULL
+
+# Large enough for several chunks, read back in order; FORMAT can also be explicit.
+statement ok
+COPY (SELECT i, 'row' || i AS s FROM range(5000) t(i) ORDER BY i) TO '__TEST_DIR__/many.quackfile' (FORMAT quackfile);
+
+statement ok
+CREATE TABLE many (i BIGINT, s VARCHAR);
+
+statement ok
+COPY many FROM '__TEST_DIR__/many.quackfile' (FORMAT quackfile);
+
+query IIT
+SELECT count(*), sum(i), bool_and(s = 'row' || i) FROM many;
+----
+5000	12497500	true
+
+statement error
+COPY ducks TO '__TEST_DIR__/options.quackfile' (FORMAT quackfile, quacks 3);
+----
+quackfile does not take any options
+
+statement ok
+CREATE TABLE wide AS SELECT 1 a, 2 b, 3 c;
+
+statement error
+COPY wide FROM '__TEST_DIR__/ducks.quackfile';
+----
+quackfile line 1: expected 3 fields, found 2
+
+statement error
+COPY many FROM '__TEST_DIR__/ducks.quackfile';
+----
+Could not convert string 'Hi' to INT64
